@@ -58,10 +58,27 @@ make test     # unit tests
 
 ## Releasing (maintainers)
 
-1. Move the **Unreleased** entries in `CHANGELOG.md` under a new version heading.
-2. Tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The **Release** workflow builds every platform and publishes the GitHub release, with the notes
-   taken from the changelog.
+1. Move the **Unreleased** entries in `CHANGELOG.md` under a new heading such as `## [0.2.0] - 2026-12-01`,
+   commit, push and wait for CI to pass.
+2. Tag and push: `git tag -a v0.2.0 -m v0.2.0 && git push origin v0.2.0`. A tag with a suffix such as
+   `v0.2.0-rc.1` becomes a pre-release.
+3. The **Release** workflow then:
+   - runs the full CI suite against the tagged commit;
+   - builds the bridge from scratch, with no cache and no write access, and builds archives for all
+     six platforms;
+   - attests their build provenance;
+   - uploads everything to a draft release and publishes it only once the upload is complete.
+
+   The notes come from the changelog section, and the run fails if that section is missing.
+
+A published release is never changed. If something is wrong, tag a new patch version. If a run fails
+before publishing, fix the cause and use **Re-run all jobs**: the leftover draft is replaced.
+
+### Updating Paseo
+
+The bridge is built from Paseo `PASEO_REF`, which must resolve to `PASEO_COMMIT` (both are in the
+`Makefile`). To move to a new Paseo version, update both, run `make distclean && make && make test`, and
+try the app against a daemon of that version.
 
 ## Code of conduct
 

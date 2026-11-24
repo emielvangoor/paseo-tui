@@ -8,6 +8,7 @@
 set -eu
 
 PASEO_REF=${PASEO_REF:-v0.17.3}
+PASEO_COMMIT=${PASEO_COMMIT:-}
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
@@ -21,6 +22,12 @@ if [ -z "${PASEO_SRC:-}" ]; then
     fi
     echo "==> fetching Paseo $PASEO_REF into .paseo-src"
     git clone --quiet --depth 1 --branch "$PASEO_REF" https://github.com/getpaseo/paseo.git "$PASEO_SRC"
+    got=$(git -C "$PASEO_SRC" rev-parse HEAD)
+    if [ -n "$PASEO_COMMIT" ] && [ "$got" != "$PASEO_COMMIT" ]; then
+      echo "==> Paseo $PASEO_REF is commit $got, expected $PASEO_COMMIT; refusing to build." >&2
+      echo "    Check the new commit, update PASEO_COMMIT, then run make distclean." >&2
+      exit 1
+    fi
     echo "==> installing Paseo's dependencies (one-time, takes a few minutes)"
     (cd "$PASEO_SRC" && ELECTRON_SKIP_BINARY_DOWNLOAD=1 PUPPETEER_SKIP_DOWNLOAD=1 \
       npm ci --no-audit --no-fund --loglevel=error)
