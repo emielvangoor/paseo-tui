@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-24
+
 ### Added
 
 - **Update notices and `paseo-tui update`.** A daily background check shows `↑ vX.Y.Z available` in the
@@ -15,7 +17,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Security
 
 - Updated `golang.org/x/text` (GO-2026-5970) and `github.com/yuin/goldmark` (GO-2026-5320).
-- Release archives now come with signed build provenance attestations.
+- Release archives now come with signed build provenance attestations, and `checksums.txt` is signed
+  with the release key (`checksums.txt.sig`).
+
+### Changed
+
+- The release pipeline runs the full test suite on all three platforms before building, builds without
+  write access, and publishes a release only once all its files are uploaded. Published releases are
+  never changed.
+
+Upgrading from 0.1.0: download this release once by hand. From here on, `paseo-tui update` does it for you.
 
 ## [0.1.0] - 2026-11-24
 
@@ -49,5 +60,6 @@ The first public release.
 - **Self-contained binaries** for macOS, Linux and Windows (arm64 and amd64). The bridge is embedded,
   and Paseo's own runtime is used when Node.js isn't installed.
 
-[Unreleased]: https://github.com/emielvangoor/paseo-tui/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/emielvangoor/paseo-tui/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/emielvangoor/paseo-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/emielvangoor/paseo-tui/releases/tag/v0.1.0
