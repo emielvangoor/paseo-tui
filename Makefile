@@ -2,6 +2,8 @@
 
 BINARY    := paseo-tui
 PASEO_REF ?= v0.17.3
+# The commit PASEO_REF must resolve to; a moved tag fails the build. Update both together.
+PASEO_COMMIT ?= dd7c0499a8c311fae7b3244722a64d73cc178e4a
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 GO        ?= go
@@ -10,9 +12,9 @@ DIST      := dist
 # Release targets as GOOS/GOARCH.
 PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64
 
-export PASEO_REF
+export PASEO_REF PASEO_COMMIT
 
-.PHONY: all build bridge run test vet fmt fmt-check lint release clean distclean help
+.PHONY: all build bridge run test vet fmt fmt-check lint cross release clean distclean help
 
 all: build ## Build the bridge and the binary (default)
 
@@ -43,6 +45,12 @@ fmt-check: ## Fail if any Go file isn't gofmt-formatted
 	@test -z "$$(gofmt -l *.go)" || (echo "These files need 'make fmt':"; gofmt -l *.go; exit 1)
 
 lint: fmt-check vet ## fmt-check + vet
+
+cross: bridge ## Compile every release platform without packaging (a quick portability check)
+	@set -e; for p in $(PLATFORMS); do \
+		echo "  $$p"; \
+		CGO_ENABLED=0 GOOS=$${p%/*} GOARCH=$${p#*/} $(GO) build -trimpath -o /dev/null . ; \
+	done
 
 release: bridge ## Cross-compile release archives and checksums into dist/
 	@mkdir -p $(DIST)

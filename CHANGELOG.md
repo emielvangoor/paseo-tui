@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Security
+
+- Updated `golang.org/x/text` (GO-2026-5970) and `github.com/yuin/goldmark` (GO-2026-5320).
+- Release archives now come with signed build provenance attestations.
+
 ## [0.1.0] - 2026-11-24
 
 The first public release.

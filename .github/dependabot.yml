@@ -4,10 +4,24 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    # Let new versions age a week before adopting them (supply-chain safety).
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps"
     groups:
-      charm:
-        patterns: ["github.com/charmbracelet/*"]
+      go:
+        patterns: ["*"]
+
+  # Actions are pinned to commit SHAs; Dependabot bumps the SHA and the version comment together.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+    groups:
+      actions:
+        patterns: ["*"]

@@ -76,7 +76,10 @@ Expand-Archive paseo-tui.zip .
 | Linux, x86_64 / ARM64 | `paseo-tui_linux_amd64.tar.gz` / `paseo-tui_linux_arm64.tar.gz` |
 | Windows, x86_64 / ARM64 | `paseo-tui_windows_amd64.zip` / `paseo-tui_windows_arm64.zip` |
 
-Each release includes `checksums.txt` (SHA-256).
+Each release includes `checksums.txt` (SHA-256), and each archive has a signed build provenance
+attestation; see [verifying a release](SECURITY.md#verifying-a-release). The macOS binaries aren't
+notarized: if you download through a browser and macOS blocks the binary, run
+`xattr -d com.apple.quarantine paseo-tui`.
 
 ### From source
 
