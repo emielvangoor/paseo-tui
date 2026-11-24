@@ -391,7 +391,8 @@ func packageManager(exe string) (name, cmd string) {
 	p := filepath.ToSlash(exe)
 	switch {
 	case strings.Contains(p, "/Cellar/") || strings.Contains(p, "/homebrew/") || strings.Contains(p, "/linuxbrew/"):
-		return "Homebrew", "brew upgrade paseo-tui"
+		// brew upgrade only refreshes taps once its auto-update interval (a day) has passed
+		return "Homebrew", "brew update && brew upgrade paseo-tui"
 	case strings.Contains(strings.ToLower(p), "/scoop/apps/"):
 		return "Scoop", "scoop update paseo-tui"
 	case strings.HasPrefix(p, "/nix/store/"):

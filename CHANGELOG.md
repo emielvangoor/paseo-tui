@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The Homebrew update hint is now `brew update && brew upgrade paseo-tui`. Plain `brew upgrade`
+  refreshes the tap only once a day, so it could report the old version as up to date.
+
 ## [0.4.0] - 2026-11-24
 
 ### Added

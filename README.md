@@ -64,8 +64,9 @@ scoop bucket add emielvangoor https://github.com/emielvangoor/scoop-bucket
 scoop install emielvangoor/paseo-tui
 ```
 
-Each new release updates the Homebrew tap and the Scoop bucket automatically, so `brew upgrade` and
-`scoop update` pick it up. The `.deb`, `.rpm` and `.apk` files are attached to every
+Each new release updates the Homebrew tap and the Scoop bucket automatically. Run
+`brew update && brew upgrade paseo-tui` (plain `brew upgrade` refreshes the tap only once a day) or
+`scoop update paseo-tui`. The `.deb`, `.rpm` and `.apk` files are attached to every
 [release](https://github.com/emielvangoor/paseo-tui/releases/latest).
 
 **Arch Linux:** there's no AUR package yet; see [#8](https://github.com/emielvangoor/paseo-tui/issues/8) if
