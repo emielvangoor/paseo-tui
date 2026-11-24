@@ -77,6 +77,7 @@ type Snapshot struct {
 	Project            *ProjectPlacement `json:"project"`
 	Background         bool              `json:"background"`
 	Labels             map[string]string `json:"labels"`
+	Options            json.RawMessage   `json:"options"` // effective provider options, carried into a fork
 	ThinkingOptionID   *string           `json:"thinkingOptionId"`
 	AvailableModes     []AgentMode       `json:"availableModes"`
 	Features           []AgentFeature    `json:"features"`

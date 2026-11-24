@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -37,6 +38,8 @@ const (
 	ovSettings
 	ovMenu
 	ovProject
+	ovRename
+	ovPane
 )
 
 // ---------- messages ----------
@@ -112,6 +115,7 @@ type Model struct {
 
 	confirmText string
 	confirmFn   func() tea.Cmd
+	askingQuit  bool // the confirmation is the quit question (q or ctrl+c again confirms)
 
 	form      *NewAgentForm
 	providers []Provider
@@ -149,8 +153,11 @@ type Model struct {
 	settings       *Settings
 	menu           *ActionMenu
 	projForm       *ProjectForm
-	pendingNewForm *NewAgentForm // New workspace form waiting for "+ Add project…" to finish
-	detailsScroll  int           // scroll offset of the details panel
+	renaming       *renameForm
+	panes          map[paneID]*termPane // floating terminal panes (e editor, F files) per workspace, also while hidden
+	paneShown      paneID               // which one ovPane shows
+	pendingNewForm *NewAgentForm        // New workspace form waiting for "+ Add project…" to finish
+	detailsScroll  int                  // scroll offset of the details panel
 	drag           dragTarget
 	modelCache     map[string][]ModelInfo // provider -> models
 	vpLines        []string               // rendered transcript lines, for mouse selection
@@ -186,6 +193,7 @@ func NewModel(cfg BridgeConfig) Model {
 		subTabs:    map[string][]tabItem{},
 		hist:       loadHistory(),
 		modelCache: map[string][]ModelInfo{},
+		panes:      map[paneID]*termPane{},
 		wsViews:    map[string]*wsView{},
 		timeline:   NewTimeline(),
 		render:     NewRenderer(lipgloss.HasDarkBackground()),
@@ -862,6 +870,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		for _, p := range m.runningPanes() {
+			w, h := m.paneBox()
+			p.resize(w-2, h-3)
+		}
 		m.layout()
 		if m.form != nil {
 			m.form.SetSize(m.width, m.height)
@@ -970,6 +982,38 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case paneOutputMsg:
+		if msg.p != m.panes[msg.p.id()] {
+			return m, nil
+		}
+		return m, waitPane(msg.p)
+
+	case paneExitMsg:
+		if msg.p != m.panes[msg.p.id()] {
+			return m, nil
+		}
+		delete(m.panes, msg.p.id())
+		if m.overlay == ovPane && m.paneShown == msg.p.id() {
+			m.overlay = ovNone
+		}
+		if msg.err != nil {
+			m.setStatus(msg.p.name+" exited: "+msg.err.Error(), true)
+		}
+		return m, nil
+
+	case forkContextMsg:
+		if f := m.form; f != nil && f.fork == msg.src {
+			if msg.err != nil {
+				f.fork.err = msg.err.Error()
+			} else {
+				f.fork.context, f.fork.items = msg.context, msg.items
+				if f.err == "Still loading the chat history…" {
+					f.err = ""
+				}
+			}
+		}
+		return m, nil
+
 	case branchesMsg:
 		if m.form != nil && msg.err == nil {
 			m.form.branches[msg.root] = msg.branches
@@ -1051,6 +1095,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
+		if m.overlay == ovPane {
+			m.paneMouse(msg)
+			return m, nil
+		}
 		// a click dismisses floating panels (help, command center, subagent list)
 		if (m.overlay == ovHelp || m.overlay == ovPalette || m.overlay == ovSubs || m.overlay == ovSettings || m.overlay == ovMenu) &&
 			msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
@@ -1107,9 +1155,16 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.overlay == ovPane { // the pane's program gets every key
+		m.paneKey(k)
+		return m, nil
+	}
 	if k.String() == "ctrl+c" {
-		m.shutdown()
-		return m, tea.Quit
+		if m.overlay == ovConfirm && m.askingQuit { // a second ctrl+c confirms
+			m.shutdown()
+			return m, tea.Quit
+		}
+		return m.quit()
 	}
 
 	switch m.overlay {
@@ -1117,16 +1172,20 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.overlay = ovNone
 		return m, nil
 	case ovConfirm:
-		switch k.String() {
+		key := k.String()
+		if m.askingQuit && key == "q" { // q, q quits
+			key = "y"
+		}
+		switch key {
 		case "y", "Y", "enter":
-			m.overlay = ovNone
+			m.overlay, m.askingQuit = ovNone, false
 			fn := m.confirmFn
 			m.confirmFn = nil
 			if fn != nil {
 				return m, fn()
 			}
 		case "n", "N", "esc", "q":
-			m.overlay = ovNone
+			m.overlay, m.askingQuit = ovNone, false
 		}
 		return m, nil
 	case ovSettings:
@@ -1135,6 +1194,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.menuKey(k)
 	case ovProject:
 		return m, m.projectFormKey(k)
+	case ovRename:
+		return m, m.renameKey(k)
 	case ovSubs:
 		done, pick := m.subList.Update(k)
 		if done {
@@ -1310,18 +1371,17 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	a := m.current()
 	switch k.String() {
 	case "q":
-		m.shutdown()
-		return m, tea.Quit
+		return m.quit()
 	case "?":
 		m.overlay = ovHelp
 	case "p", "ctrl+p", "/":
 		return m.openPalette()
-	case "j", "down":
+	case "J", "down":
 		if m.state.HideSidebar {
 			return m, m.stepWorkspace(1)
 		}
 		return m, m.step(1)
-	case "k", "up":
+	case "K", "up":
 		if m.state.HideSidebar {
 			return m, m.stepWorkspace(-1)
 		}
@@ -1432,7 +1492,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.focus = focusInput
 			return m, m.input.Focus()
 		}
-	case "pgup", "pgdown", "ctrl+u", "ctrl+d", "g", "G", "J", "K":
+	case "pgup", "pgdown", "ctrl+u", "ctrl+d", "g", "G", "j", "k":
 		return m.scroll(k.String())
 	case "n", "c":
 		return m.openNewForm()
@@ -1440,6 +1500,14 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openNewFormMode(false, "")
 	case "m":
 		return m.openSettings()
+	case "f":
+		return m.openFork()
+	case "R":
+		return m.openRename()
+	case "e":
+		return m.openPane(paneEditor)
+	case "F":
+		return m.openPane(paneFiles)
 	case "u":
 		if m.selectedID != "" {
 			parent := m.selectedID
@@ -1525,9 +1593,9 @@ func (m Model) scroll(key string) (tea.Model, tea.Cmd) {
 		m.vp.HalfViewUp()
 	case "ctrl+d":
 		m.vp.HalfViewDown()
-	case "K":
+	case "k":
 		m.vp.LineUp(6)
-	case "J":
+	case "j":
 		m.vp.LineDown(6)
 	case "g":
 		m.vp.GotoTop()
@@ -1625,6 +1693,43 @@ func (m Model) openNewFormMode(asTab bool, projectID string) (tea.Model, tea.Cmd
 	return m, tea.Batch(cmds...)
 }
 
+// openFork opens the New agent form as a fork of the focused agent: a new tab in
+// this workspace (or, via Where, a new workspace) that starts from its chat history.
+func (m Model) openFork() (tea.Model, tea.Cmd) {
+	a := m.current()
+	if a == nil || m.selSub != nil {
+		m.setStatus("Open an agent tab to fork it", true)
+		return m, nil
+	}
+	if m.br == nil || !m.connected {
+		m.setStatus("Not connected to the daemon", true)
+		return m, nil
+	}
+	mm, cmd := m.openNewFormMode(true, "")
+	m = mm.(Model)
+	f := m.form
+	src := &forkSource{
+		agentID: a.ID, name: agentLabel(*a), provider: a.Snap.Provider, cwd: a.Cwd,
+		modeID: deref(a.Snap.CurrentModeID), options: a.Snap.Options,
+	}
+	f.fork = src
+	f.provider, f.model, f.thinking = a.Snap.Provider, currentModel(a), deref(a.Snap.ThinkingOptionID)
+	f.prompt.Placeholder = "What should the fork do next?"
+	br := m.br
+	load := func() tea.Msg {
+		data, err := br.Call("forkContext", map[string]any{"agentId": src.agentID}, 30*time.Second)
+		var res struct {
+			Attachment json.RawMessage `json:"attachment"`
+			ItemCount  int             `json:"itemCount"`
+		}
+		if err == nil {
+			err = json.Unmarshal(data, &res)
+		}
+		return forkContextMsg{src: src, context: res.Attachment, items: res.ItemCount, err: err}
+	}
+	return m, tea.Batch(cmd, m.loadModels(f.provider), load)
+}
+
 func (m *Model) loadModels(provider string) tea.Cmd {
 	if provider == "" || m.br == nil {
 		return nil
@@ -1666,7 +1771,11 @@ func (m *Model) loadBranches(root string) tea.Cmd {
 }
 
 // rememberNewChoices saves the form's choices whenever they change, like the desktop.
+// A fork's choices come from its source agent, so they aren't remembered.
 func (m *Model) rememberNewChoices(f *NewAgentForm) {
+	if f.fork != nil {
+		return
+	}
 	iso := map[int]string{isoLocal: "local", isoWorktree: "worktree"}[f.preferIso]
 	if iso == m.state.NewIsolation && f.provider == m.state.NewProvider &&
 		f.model == m.state.NewModel && f.thinking == m.state.NewThinking {
@@ -1709,9 +1818,30 @@ func (m *Model) submitNewForm() tea.Cmd {
 	}
 }
 
+// quit asks before exiting; the question warns when hidden panes would close with it.
+func (m Model) quit() (tea.Model, tea.Cmd) {
+	q := "Quit paseo-tui?"
+	if ps := m.runningPanes(); len(ps) > 0 {
+		var names []string
+		for _, p := range ps {
+			names = append(names, p.name+" ("+filepath.Base(p.dir)+")")
+		}
+		q = fmt.Sprintf("Quit paseo-tui? %s still running in the background and will close too.\n\nUnsaved changes there are lost.",
+			strings.Join(names, ", ")+map[bool]string{true: " is", false: " are"}[len(names) == 1])
+	}
+	m.askingQuit = true
+	return m.confirm(q, func() tea.Cmd {
+		m.shutdown()
+		return tea.Quit
+	})
+}
+
 func (m *Model) shutdown() {
 	if m.br != nil {
 		m.br.Close()
+	}
+	for _, p := range m.runningPanes() {
+		p.kill()
 	}
 }
 
@@ -1884,6 +2014,10 @@ func (m Model) View() string {
 		return m.centerOver(screen, m.menuView())
 	case ovProject:
 		return m.centerOver(screen, m.projectFormView())
+	case ovRename:
+		return m.centerOver(screen, m.renameView())
+	case ovPane:
+		return m.centerOver(screen, m.paneView())
 	}
 	return screen
 }
@@ -1899,7 +2033,7 @@ func (m Model) centerOver(screen, box string) string {
 }
 
 func (m Model) viewFooter() string {
-	keys := "p find · n new · [ ] tabs · m model · d details · enter message · ? help"
+	keys := "p find · n new · f fork · [ ] tabs · m model · d details · enter message · ? help"
 	if m.focus == focusInput {
 		keys = "enter send · alt+enter newline · ↑↓ history · ctrl+v image · esc done"
 	}
@@ -1930,6 +2064,26 @@ func (m Model) viewFooter() string {
 		}
 		if right != "" && m.focus == focusInput {
 			right = sMuted.Render("esc, then ") + right
+		}
+	}
+	if ps := m.runningPanes(); right == "" && len(ps) > 0 {
+		// this workspace's hidden panes, and how many other workspaces have some open
+		dir, elsewhere := m.workspaceDir(), 0
+		for _, p := range ps {
+			if p.dir != dir {
+				elsewhere++
+				continue
+			}
+			if right != "" {
+				right += sMuted.Render(" · ")
+			}
+			right += sAccent.Render(paneKeys[p.kind]) + sMuted.Render(" "+p.name)
+		}
+		if elsewhere > 0 {
+			if right != "" {
+				right += sMuted.Render(" · ")
+			}
+			right += sMuted.Render(fmt.Sprintf("%d pane%s open elsewhere", elsewhere, map[bool]string{true: "", false: "s"}[elsewhere == 1]))
 		}
 	}
 	if right == "" && m.updateAvail != "" {
@@ -2387,7 +2541,7 @@ func shortHome(p string) string {
 func helpBox() string {
 	rows := [][2]string{
 		{"p, ctrl+p, /", "command center: workspaces, agents, actions"},
-		{"j / k, ↑ / ↓", "move through projects and workspaces"},
+		{"J / K, ↑ / ↓", "move through projects and workspaces"},
 		{"{ / }", "previous / next workspace in the tree (works with the sidebar hidden)"},
 		{"h / l, ← / →", "collapse / expand project"},
 		{"space", "toggle project"},
@@ -2414,15 +2568,19 @@ func helpBox() string {
 		{"y / x", "allow / deny pending permission"},
 		{"a", "archive agent / workspace, or remove project"},
 		{"D", "delete agent"},
+		{"f", "fork the agent: a new tab (or workspace) that starts from its chat history"},
+		{"R", "rename the agent (its tab)"},
+		{"e", "edit the workspace in $VISUAL / $EDITOR, in a floating pane (ctrl+\\ hides it)"},
+		{"F", "browse files in ranger / yazi / lf / nnn in a floating pane (else Finder)"},
 		{"A", "toggle archived agents"},
-		{"pgup/pgdn, ctrl+u/d", "scroll transcript"},
-		{"J / K", "scroll transcript by line"},
+		{"j / k", "scroll transcript"},
+		{"pgup/pgdn, ctrl+u/d", "scroll transcript by page / half page"},
 		{"g / G", "transcript top / bottom (follow)"},
 		{"t", "show / hide thinking"},
 		{"v", "verbose tool output (commands, diffs)"},
 		{"r", "reload transcript / reconnect"},
 		{"S", "start local daemon (when stopped)"},
-		{"q, ctrl+c", "quit"},
+		{"q, ctrl+c", "quit (asks first; y or the same key again confirms)"},
 	}
 	var b strings.Builder
 	b.WriteString(sAccent.Render("paseo-tui") + sMuted.Render("  keys") + "\n\n")

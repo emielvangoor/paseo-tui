@@ -111,9 +111,20 @@ func NewPalette(m *Model) *Palette {
 	if m.showAll {
 		archived = "Hide archived agents"
 	}
+	files := ""
+	if argv := firstInstalled(filesManagers...); argv != nil {
+		files = "Browse the workspace's files in " + argv[0]
+	} else {
+		_, app := fileManager()
+		files = "Show the workspace in " + app
+	}
 	p.actions = []paletteAction{
 		{"n", "New agent in this workspace", "n"},
 		{"N", "New workspace…", "N"},
+		{"f", "Fork agent into a new tab", "f"},
+		{"R", "Rename agent", "R"},
+		{"e", "Open the workspace in your editor", "e"},
+		{"F", files, "F"},
 		{"b", sidebar, "b"},
 		{"o", group, "o"},
 		{"m", "Agent settings: model, thinking, mode", "m"},

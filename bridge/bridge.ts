@@ -348,6 +348,18 @@ async function handle(req: Json): Promise<unknown> {
       } as never)) as unknown as Json;
       return { workspaceId: req.workspaceId, agentId: a.id };
     }
+    case "forkContext": {
+      // the desktop's fork: the source agent's chat history as one attachment for the new agent's first prompt
+      const c = need();
+      if (!c.getLastServerInfoMessage()?.features?.agentForkContext) {
+        throw new Error("this daemon can't fork agents; update Paseo");
+      }
+      const r = await c.buildAgentForkContext(agentId);
+      if (!r.attachment) throw new Error("the daemon returned no chat history");
+      return { attachment: r.attachment, itemCount: r.itemCount };
+    }
+    case "rename":
+      return need().updateAgent(agentId, { name: req.name as string });
     case "seen":
       return need().clearAgentAttention(agentId);
     case "cancel":

@@ -66,6 +66,8 @@ type Entry struct {
 	Kind      string // user, assistant, reasoning, tool, todo, error, notice, compaction
 	Text      string
 	MessageID string
+	Forked    bool   // a user prompt that carried a fork's chat history (shown collapsed)
+	ForkedOf  string // the agent the history came from
 	Level     string
 	Tool      *ToolEntry
 	Todos     []TodoItem
@@ -96,6 +98,27 @@ func (t *Timeline) last() *Entry {
 
 func (t *Timeline) push(e *Entry) { t.Entries = append(t.Entries, e) }
 
+// splitForkHistory separates the chat history a fork's first prompt carries (the
+// daemon's <chat-history-summary> block) from what the user wrote, and reads the
+// source agent's name from its header.
+func splitForkHistory(text string) (prompt, from string, ok bool) {
+	rest, found := strings.CutPrefix(strings.TrimLeft(text, " \t\r\n"), "<chat-history-summary>")
+	if !found {
+		return text, "", false
+	}
+	summary, prompt, found := strings.Cut(rest, "</chat-history-summary>")
+	if !found {
+		return text, "", false
+	}
+	for _, line := range strings.Split(summary, "\n") {
+		if s, ok := strings.CutPrefix(line, "Source agent: "); ok {
+			from = strings.TrimSpace(s)
+			break
+		}
+	}
+	return strings.TrimSpace(prompt), from, true
+}
+
 // Apply merges one raw timeline item into the timeline.
 func (t *Timeline) Apply(raw json.RawMessage) {
 	var it rawItem
@@ -104,7 +127,11 @@ func (t *Timeline) Apply(raw json.RawMessage) {
 	}
 	switch it.Type {
 	case "user_message":
-		t.push(&Entry{Kind: "user", Text: it.Text, MessageID: it.MessageID})
+		e := &Entry{Kind: "user", Text: it.Text, MessageID: it.MessageID}
+		if prompt, from, ok := splitForkHistory(it.Text); ok {
+			e.Text, e.Forked, e.ForkedOf = prompt, true, from
+		}
+		t.push(e)
 	case "assistant_message", "reasoning":
 		kind := "assistant"
 		if it.Type == "reasoning" {
@@ -281,7 +308,15 @@ func (r *Renderer) wrap(s string, indent int) string {
 func (r *Renderer) renderEntry(e *Entry) string {
 	switch e.Kind {
 	case "user":
-		return sUserBar.Width(max(10, r.width-3)).Render(sBold.Render(strings.TrimSpace(e.Text)))
+		bar := sUserBar.Width(max(10, r.width-3)).Render(sBold.Render(strings.TrimSpace(e.Text)))
+		if !e.Forked {
+			return bar
+		}
+		note := r.wrap(sAccent.Render("⑂ ")+sMuted.Render("forked with the chat history of "+orDefault(e.ForkedOf, "another agent")), 0)
+		if strings.TrimSpace(e.Text) == "" {
+			return note
+		}
+		return note + "\n" + bar
 	case "assistant":
 		txt := strings.TrimSpace(e.Text)
 		if txt == "" {

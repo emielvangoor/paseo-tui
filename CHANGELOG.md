@@ -6,6 +6,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `f` forks the focused agent, like the desktop's fork menu: a new tab (or, via *Where*, a new
+  workspace) with the same provider, model, thinking, mode and options, whose first prompt carries
+  the source agent's chat history. Also in the command center.
+- `R` renames the focused agent, which is also its tab label. Also in the command center.
+- `e` opens the focused workspace's directory in your editor (`$VISUAL`, `$EDITOR`, else nvim or vim)
+  in a pane floating over the UI, so agents keep updating behind it. `ctrl+\` hides the pane and `e`
+  brings it back; quitting the editor closes it. Quitting paseo-tui with the editor still open asks first.
+- `F` browses the focused workspace's files in a floating pane, like `e`, with the first terminal file
+  manager installed: ranger, yazi, lf or nnn. Without one it opens the directory in Finder on macOS,
+  Explorer on Windows, or the file manager on Linux (`xdg-open`). Also in the command center.
+  Each workspace has its own `e` and `F` panes, so switching workspaces opens that workspace's directory.
+
+### Changed
+
+- `j` / `k` scroll the transcript and `J` / `K` move through the sidebar (they were the other way round).
+  `↑` / `↓` still move through the sidebar.
+- `q` and `ctrl+c` ask "Quit paseo-tui?" before exiting. `y`, `enter` or the same key again confirms.
+
 ### Fixed
 
 - The Homebrew update hint is now `brew update && brew upgrade paseo-tui`. Plain `brew upgrade`

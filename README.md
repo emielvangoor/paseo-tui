@@ -33,7 +33,11 @@ It works with your local Paseo daemon or any remote one, over SSH or the network
   **git worktree**, the branch to start from, the provider, model and thinking level, then type the task.
   The daemon names the workspace and branch after your prompt.
 - **Steer agents.** Send follow-ups, paste images, interrupt, allow or deny tool permissions, and switch
-  model, thinking or mode mid-session (`m`).
+  model, thinking or mode mid-session (`m`). **Fork** an agent (`f`) into a new tab or workspace that
+  starts from its chat history, as the desktop does, and **rename** agents (`R`).
+- **Peek at the code.** `e` opens the workspace in your editor (`$VISUAL` / `$EDITOR`, else nvim or vim) in a
+  pane floating over the UI, while agents keep streaming behind it. `ctrl+\` hides it, `e` brings it back,
+  quitting the editor closes it.
 - **See what's happening.** Markdown transcripts, collapsible thinking, tool calls with diffs and output,
   a live progress line ("⠋ Running Bash: npm test · 1:24"), and a **details panel** with context-window
   use, tokens, cost and the agent's task list.
@@ -167,7 +171,7 @@ Press `?` inside the app for every shortcut.
 | Key | Action |
 |---|---|
 | `p` · `ctrl+p` · `/` | Command center: workspaces, agents, actions |
-| `j` / `k` · `↑` / `↓` | Move through the sidebar |
+| `J` / `K` · `↑` / `↓` | Move through the sidebar |
 | `{` / `}` | Previous / next workspace in tree order (works with the sidebar hidden) |
 | `[` / `]` · `tab` · `alt+1…9` | Previous / next agent tab, or jump to tab N |
 | `h` / `l` · `space` · `z` | Collapse / expand a project · toggle · collapse all the others |
@@ -186,6 +190,10 @@ Press `?` inside the app for every shortcut.
 | `↑` / `↓` (in the composer) | Previous / next prompt from history |
 | `ctrl+v` | Paste an image from the clipboard (pasting or dropping an image path works too) |
 | `n` · `ctrl+n` | New agent in this workspace (a new tab) |
+| `f` | Fork the agent: a new tab (or, via *Where*, a new workspace) with the same provider, model and mode that starts from its chat history |
+| `R` | Rename the agent (its tab) |
+| `e` | Open the workspace in your editor in a floating pane: `$VISUAL`, `$EDITOR`, else nvim or vim (`ctrl+\` hides it, `e` brings it back, quitting the editor closes it). GUI editors need their terminal mode, e.g. `VISUAL="emacs -nw"` |
+| `F` | Browse the workspace's files in a floating pane with ranger, yazi, lf or nnn (the first one installed; `ctrl+\` hides it, `F` brings it back). Without one, opens the directory in Finder, Explorer or the Linux file manager |
 | `N` | New workspace (project directory or worktree, branch, provider, model, thinking) |
 | `m` | Agent settings: model, thinking level, mode, toggles such as Fast |
 | `s` | Interrupt the running agent |
@@ -203,12 +211,12 @@ Press `?` inside the app for every shortcut.
 |---|---|
 | `t` | Show / hide thinking |
 | `v` | Verbose tool output: command output and diffs |
-| mouse wheel · `pgup` / `pgdn` · `ctrl+u` / `ctrl+d` · `J` / `K` | Scroll the transcript (the wheel accelerates) |
+| mouse wheel · `pgup` / `pgdn` · `ctrl+u` / `ctrl+d` · `j` / `k` | Scroll the transcript (the wheel accelerates) |
 | `g` / `G` | Top / bottom of the transcript (`G` follows new output) |
 | `alt+↑` / `alt+↓` | Scroll the details panel |
 | `A` | Show archived agents |
 | `r` · `S` | Reload / reconnect · start the local daemon |
-| `q` · `ctrl+c` | Quit |
+| `q` · `ctrl+c` | Quit (asks first; `y`, or the same key again, confirms) |
 
 </details>
 

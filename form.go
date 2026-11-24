@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -73,6 +74,7 @@ type NewAgentForm struct {
 	pickSel   int
 
 	attachments []string
+	fork        *forkSource // set when forking another agent (f)
 	pasting     bool
 	width       int
 	height      int
@@ -84,6 +86,24 @@ type branchesMsg struct {
 	root     string
 	branches []string
 	err      error
+}
+
+// forkSource is the agent a fork starts from. Like the desktop's "Fork in new
+// tab", its chat history goes along as an attachment of the first prompt, and
+// the new agent starts with the same provider, model, thinking, mode and options.
+type forkSource struct {
+	agentID, name, provider, cwd, modeID string
+	options                              json.RawMessage
+	context                              json.RawMessage // the chat-history attachment; nil while loading
+	items                                int
+	err                                  string
+}
+
+type forkContextMsg struct {
+	src     *forkSource
+	context json.RawMessage
+	items   int
+	err     error
 }
 
 func newPrompt() textarea.Model {
@@ -421,6 +441,10 @@ func (f *NewAgentForm) trySubmit() (bool, bool, string, tea.Cmd) {
 		f.err = "Choose a project."
 	case f.provider == "":
 		f.err = "Choose a provider."
+	case f.fork != nil && f.fork.err != "":
+		f.err = "Chat history: " + f.fork.err
+	case f.fork != nil && f.fork.context == nil:
+		f.err = "Still loading the chat history…"
 	default:
 		return true, true, "", nil
 	}
@@ -448,8 +472,22 @@ func (f *NewAgentForm) Request() (op string, fields map[string]any) {
 	if len(f.attachments) > 0 {
 		agent["images"] = f.attachments
 	}
+	if fk := f.fork; fk != nil {
+		agent["attachments"] = []json.RawMessage{fk.context}
+		if f.provider == fk.provider { // the source's mode and options only mean something to its provider
+			if fk.modeID != "" {
+				agent["modeId"] = fk.modeID
+			}
+			if len(fk.options) > 0 && string(fk.options) != "null" {
+				agent["providerOptions"] = fk.options
+			}
+		}
+	}
 	if f.iso == isoThis {
 		agent["cwd"] = f.wsDir
+		if f.fork != nil && f.fork.cwd != "" {
+			agent["cwd"] = f.fork.cwd
+		}
 		return "createAgent", map[string]any{"workspaceId": f.wsID, "agent": agent}
 	}
 	p := f.project()
@@ -523,6 +561,12 @@ func (f *NewAgentForm) View(m Model) string {
 	if f.iso == isoThis {
 		title = "New agent in " + truncate(f.wsName, inner-16)
 	}
+	if fk := f.fork; fk != nil {
+		title = fmt.Sprintf("Fork %q into a new workspace", truncate(fk.name, inner-34))
+		if f.iso == isoThis {
+			title = fmt.Sprintf("Fork %q into a new tab", truncate(fk.name, inner-28))
+		}
+	}
 	lines := []string{sAccent.Render(" " + title), ""}
 
 	var chips []string
@@ -552,6 +596,16 @@ func (f *NewAgentForm) View(m Model) string {
 			names = append(names, "▣ "+filepath.Base(a))
 		}
 		lines = append(lines, sAccent.Render(" "+truncate(strings.Join(names, "  "), inner-2)))
+	}
+	if fk := f.fork; fk != nil {
+		switch {
+		case fk.err != "":
+			lines = append(lines, sRed.Render(" ⑂ chat history: "+truncate(fk.err, inner-20)))
+		case fk.context == nil:
+			lines = append(lines, " "+m.spin.View()+sMuted.Render(" loading the chat history…"))
+		default:
+			lines = append(lines, sAccent.Render(" ⑂ ")+sMuted.Render(fmt.Sprintf("chat history from %q · %d items", truncate(fk.name, inner-40), fk.items)))
+		}
 	}
 	if f.busy {
 		lines = append(lines, " "+m.spin.View()+sMuted.Render(" creating…"))

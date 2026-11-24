@@ -187,3 +187,19 @@ func TestToolErrorText(t *testing.T) {
 		}
 	}
 }
+
+func TestForkedPromptCollapsesHistory(t *testing.T) {
+	text := "<chat-history-summary>\nChat history from a previous Paseo agent.\nSource agent: Fix the login flow\nSource directory: /src\n\n[User] hi\n</chat-history-summary>\n\nNow add tests."
+	raw, _ := json.Marshal(map[string]string{"type": "user_message", "text": text})
+	tl := NewTimeline()
+	tl.Apply(raw)
+	e := tl.Entries[0]
+	if !e.Forked || e.ForkedOf != "Fix the login flow" || e.Text != "Now add tests." {
+		t.Fatalf("got forked=%v of=%q text=%q", e.Forked, e.ForkedOf, e.Text)
+	}
+	plain, _ := json.Marshal(map[string]string{"type": "user_message", "text": "mentions <chat-history-summary> mid-text"})
+	tl.Apply(plain)
+	if e := tl.Entries[1]; e.Forked || e.Text != "mentions <chat-history-summary> mid-text" {
+		t.Fatalf("plain prompt changed: %+v", e)
+	}
+}
