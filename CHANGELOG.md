@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Package managers.** Install with Homebrew (`brew install emielvangoor/tap/paseo-tui`, macOS and Linux),
+  the AUR (`paseo-tui-bin`), or Scoop on Windows. Every release also ships `.deb`, `.rpm` and `.apk`
+  packages for x86_64 and ARM64.
+
+### Changed
+
+- `paseo-tui update` leaves package-managed installs alone and tells you the right command. The footer's
+  update notice shows that command too, such as `brew upgrade paseo-tui`.
+
 ## [0.2.0] - 2026-11-24
 
 ### Added

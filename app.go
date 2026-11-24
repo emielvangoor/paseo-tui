@@ -77,6 +77,7 @@ type Model struct {
 	br  *Bridge
 
 	updateAvail string // a newer release, from the background update check
+	updateHint  string // how to install it for this kind of install
 
 	width, height int
 	focus         focus
@@ -842,7 +843,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return bridgeRestartMsg{} })
 
 	case updateAvailableMsg:
-		m.updateAvail = msg.version
+		m.updateAvail, m.updateHint = msg.version, updateHint()
 		return m, nil
 
 	case bridgeRestartMsg:
@@ -1883,7 +1884,7 @@ func (m Model) viewFooter() string {
 		}
 	}
 	if right == "" && m.updateAvail != "" {
-		right = sBlue.Render("↑ "+m.updateAvail+" available") + sMuted.Render(" · run paseo-tui update")
+		right = sBlue.Render("↑ "+m.updateAvail+" available") + sMuted.Render(" · "+m.updateHint)
 	}
 	left = truncate(left, max(10, m.width-lipgloss.Width(right)-3))
 	return left + strings.Repeat(" ", max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right)-1)) + right

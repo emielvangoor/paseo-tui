@@ -1,0 +1,41 @@
+# Linux packages (.deb, .rpm, .apk), built by `make release` with nfpm.
+# PKG_VERSION (no leading v) and PKG_ARCH (amd64 or arm64) come from the Makefile.
+name: paseo-tui
+version: ${PKG_VERSION}
+version_schema: semver
+arch: ${PKG_ARCH}
+platform: linux
+section: devel
+priority: optional
+maintainer: Emiel van Goor <1568041+emielvangoor@users.noreply.github.com>
+description: |
+  Keyboard-first terminal client for Paseo.
+  Run and steer your Paseo coding agents (Claude Code, Codex, Copilot,
+  OpenCode and more) from the terminal: projects, workspaces and agent
+  tabs, live transcripts, permissions and subagents.
+vendor: paseo-tui
+homepage: https://github.com/emielvangoor/paseo-tui
+license: Apache-2.0
+
+contents:
+  - src: dist/stage/nfpm/paseo-tui  # the binary for PKG_ARCH, copied here by the Makefile
+    dst: /usr/bin/paseo-tui
+    file_info:
+      mode: 0755
+  - src: LICENSE
+    dst: /usr/share/licenses/paseo-tui/LICENSE
+  - src: NOTICE
+    dst: /usr/share/licenses/paseo-tui/NOTICE
+  - src: README.md
+    dst: /usr/share/doc/paseo-tui/README.md
+
+overrides:
+  deb:
+    recommends:
+      - nodejs
+    suggests:
+      - wl-clipboard
+      - xclip
+  rpm:
+    recommends:
+      - nodejs

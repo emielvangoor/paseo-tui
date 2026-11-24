@@ -93,6 +93,19 @@ jobs:
       - name: actionlint
         run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
 
+      - name: shellcheck
+        run: shellcheck scripts/*.sh packaging/*.sh
+
+      # Render the package manifests against a throwaway build, so a broken template fails here, not at release.
+      - name: Package manifests render
+        run: |
+          mkdir -p dist
+          for f in darwin_arm64 darwin_amd64 linux_arm64 linux_amd64; do echo "$(printf '%064d' 0)  paseo-tui_$f.tar.gz"; done > dist/checksums.txt
+          for f in windows_amd64 windows_arm64; do echo "$(printf '%064d' 0)  paseo-tui_$f.zip"; done >> dist/checksums.txt
+          packaging/render.sh v0.0.0
+          ruby -c dist/pkg/homebrew/paseo-tui.rb
+          jq -e .version dist/pkg/scoop/paseo-tui.json
+
   test:
     name: Test (${{ matrix.os }})
     needs: bridge

@@ -212,7 +212,7 @@ func runUpdate(args []string) error {
 		exe = resolved
 	}
 	if pm, cmd := packageManager(exe); pm != "" {
-		return fmt.Errorf("paseo-tui was installed with %s; update it with: %s", pm, cmd)
+		return fmt.Errorf("paseo-tui was installed with %s, so update it there: %s", pm, cmd)
 	}
 
 	base := fmt.Sprintf("paseo-tui_%s_%s", runtime.GOOS, runtime.GOARCH)
@@ -382,7 +382,11 @@ func cleanupOldExecutable() {
 	}
 }
 
+// hasPacman reports whether this is an Arch-based system; a variable so tests can fake it.
+var hasPacman = func() bool { _, err := os.Stat("/usr/bin/pacman"); return err == nil }
+
 // packageManager names the package manager that owns exe, if any, and how to update with it.
+// paseo-tui update never overwrites a binary a package manager owns: its database would go stale.
 func packageManager(exe string) (name, cmd string) {
 	p := filepath.ToSlash(exe)
 	switch {
@@ -391,7 +395,29 @@ func packageManager(exe string) (name, cmd string) {
 	case strings.Contains(strings.ToLower(p), "/scoop/apps/"):
 		return "Scoop", "scoop update paseo-tui"
 	case strings.HasPrefix(p, "/nix/store/"):
-		return "Nix", "your Nix configuration"
+		return "Nix", "update your Nix configuration"
+	case p == "/usr/bin/paseo-tui" && hasPacman():
+		return "the AUR (paseo-tui-bin)", "yay -Syu paseo-tui-bin, or your AUR helper"
+	case p == "/usr/bin/paseo-tui":
+		return "a .deb, .rpm or .apk package", "install the new package from " +
+			"https://github.com/" + repoSlug + "/releases/latest"
 	}
 	return "", ""
+}
+
+// updateHint is the footer's "how to update" text for this install.
+func updateHint() string {
+	exe, err := os.Executable()
+	if err == nil {
+		if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = resolved
+		}
+		if pm, cmd := packageManager(exe); pm != "" {
+			if strings.HasPrefix(cmd, "install the new package") {
+				return "download it from GitHub"
+			}
+			return cmd
+		}
+	}
+	return "run paseo-tui update"
 }

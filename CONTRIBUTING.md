@@ -76,6 +76,22 @@ environment, and checks the signature against `keys/release.pub.pem` before anyt
 `paseo-tui update` refuses releases without a valid signature. If the key ever has to change, ship a release
 that embeds both the old and the new public key before signing with the new one.
 
+### Package managers
+
+For stable releases (no `-suffix`), the build job also creates `.deb`, `.rpm` and `.apk` packages with
+nfpm (`packaging/nfpm.yaml`) and renders the Homebrew formula, Scoop manifest and AUR PKGBUILD
+(`packaging/render.sh`). After the release is published, one job per channel pushes them with
+`packaging/publish.sh`:
+
+| Channel | Repository | Secret (on the `release` environment) |
+|---|---|---|
+| Homebrew | [emielvangoor/homebrew-tap](https://github.com/emielvangoor/homebrew-tap) | `HOMEBREW_TAP_DEPLOY_KEY`, a write deploy key of that repo |
+| Scoop | [emielvangoor/scoop-bucket](https://github.com/emielvangoor/scoop-bucket) | `SCOOP_BUCKET_DEPLOY_KEY`, a write deploy key of that repo |
+| AUR | [paseo-tui-bin](https://aur.archlinux.org/packages/paseo-tui-bin) | `AUR_SSH_KEY`, whose public key is on the maintainer's AUR account |
+
+Then the verify jobs install from each channel on a clean macOS, Windows and Arch Linux machine. If a
+channel fails, fix the cause and use **Re-run failed jobs**.
+
 A published release is never changed. If something is wrong, tag a new patch version. If a run fails
 before publishing, fix the cause and use **Re-run all jobs**: the leftover draft is replaced.
 

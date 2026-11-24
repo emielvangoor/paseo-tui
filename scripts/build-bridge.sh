@@ -9,7 +9,7 @@ set -eu
 
 PASEO_REF=${PASEO_REF:-v0.17.3}
 PASEO_COMMIT=${PASEO_COMMIT:-}
-ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
 if [ -z "${PASEO_SRC:-}" ]; then
@@ -36,7 +36,7 @@ if [ -z "${PASEO_SRC:-}" ]; then
     echo "$PASEO_REF" > "$STAMP"
   fi
 fi
-PASEO_SRC=$(CDPATH= cd -- "$PASEO_SRC" && pwd)
+PASEO_SRC=$(CDPATH='' cd -- "$PASEO_SRC" && pwd)
 
 echo "==> bundling the bridge against $PASEO_SRC"
 NODE_PATH="$PASEO_SRC/node_modules" "$PASEO_SRC/node_modules/.bin/esbuild" bridge/bridge.ts \

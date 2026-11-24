@@ -172,4 +172,15 @@ func TestPackageManager(t *testing.T) {
 			t.Errorf("packageManager(%q) = %q, want %q", path, got, want)
 		}
 	}
+
+	// /usr/bin belongs to the system package manager: the AUR on Arch, a .deb/.rpm/.apk elsewhere.
+	defer func(f func() bool) { hasPacman = f }(hasPacman)
+	hasPacman = func() bool { return true }
+	if got, cmd := packageManager("/usr/bin/paseo-tui"); !strings.Contains(got, "AUR") || !strings.Contains(cmd, "paseo-tui-bin") {
+		t.Errorf("Arch /usr/bin: got %q, %q", got, cmd)
+	}
+	hasPacman = func() bool { return false }
+	if got, cmd := packageManager("/usr/bin/paseo-tui"); !strings.Contains(got, ".deb") || !strings.Contains(cmd, "/releases/latest") {
+		t.Errorf("deb/rpm /usr/bin: got %q, %q", got, cmd)
+	}
 }

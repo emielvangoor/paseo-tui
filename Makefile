@@ -8,6 +8,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 GO        ?= go
 DIST      := dist
+NFPM      ?= $(GO) run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
 
 # Release targets as GOOS/GOARCH.
 PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 windows/arm64
@@ -52,7 +53,7 @@ cross: bridge ## Compile every release platform without packaging (a quick porta
 		CGO_ENABLED=0 GOOS=$${p%/*} GOARCH=$${p#*/} $(GO) build -trimpath -o /dev/null . ; \
 	done
 
-release: bridge ## Cross-compile release archives and checksums into dist/
+release: bridge ## Cross-compile release archives, Linux packages and checksums into dist/
 	@mkdir -p $(DIST)
 	@set -e; for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; ext=""; [ "$$os" = windows ] && ext=.exe; \
@@ -64,8 +65,15 @@ release: bridge ## Cross-compile release archives and checksums into dist/
 		if [ "$$os" = windows ]; then (cd "$(DIST)/stage" && zip -qr "../$$name.zip" "$$name"); \
 		else tar -C "$(DIST)/stage" -czf "$(DIST)/$$name.tar.gz" "$$name"; fi; \
 	done
-	@cd $(DIST) && (sha256sum *.tar.gz *.zip 2>/dev/null || shasum -a 256 *.tar.gz *.zip) > checksums.txt
-	@ls -1 $(DIST)/*.tar.gz $(DIST)/*.zip $(DIST)/checksums.txt
+	@set -e; mkdir -p $(DIST)/stage/nfpm; for arch in amd64 arm64; do \
+		cp $(DIST)/stage/$(BINARY)_linux_$$arch/$(BINARY) $(DIST)/stage/nfpm/$(BINARY); \
+		for fmt in deb rpm apk; do \
+		echo "  $$fmt/$$arch"; \
+		PKG_VERSION=$$(echo "$(VERSION)" | sed 's/^v//') PKG_ARCH=$$arch \
+			$(NFPM) package --config packaging/nfpm.yaml --packager $$fmt --target $(DIST)/ >/dev/null; \
+	done; done
+	@cd $(DIST) && (sha256sum *.tar.gz *.zip *.deb *.rpm *.apk 2>/dev/null || shasum -a 256 *.tar.gz *.zip *.deb *.rpm *.apk) > checksums.txt
+	@ls -1 $(DIST)/*.tar.gz $(DIST)/*.zip $(DIST)/*.deb $(DIST)/*.rpm $(DIST)/*.apk $(DIST)/checksums.txt
 
 clean: ## Remove build output
 	go clean
