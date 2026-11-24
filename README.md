@@ -81,6 +81,21 @@ attestation; see [verifying a release](SECURITY.md#verifying-a-release). The mac
 notarized: if you download through a browser and macOS blocks the binary, run
 `xattr -d com.apple.quarantine paseo-tui`.
 
+### Updating
+
+paseo-tui checks for a new release once a day, in the background, and shows `↑ vX.Y.Z available` in the
+footer. To install it:
+
+```sh
+paseo-tui update           # download, verify and replace this binary
+paseo-tui update --check   # only report whether there's a newer release
+```
+
+The update is installed only if the release's checksums carry a valid signature from the paseo-tui
+release key, and the archive matches its checksum. Installed with a package manager? Then `update` tells
+you to use it instead. To turn the check off, pass `--no-update-check` or set
+`PASEO_TUI_NO_UPDATE_CHECK=1`. The check sends nothing beyond a plain request to GitHub's releases API.
+
 ### From source
 
 Requires Go (see `go.mod`), Node.js 22+ and git.

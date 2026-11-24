@@ -12,12 +12,27 @@ import (
 var version = "dev"
 
 func main() {
+	cleanupOldExecutable()
+	if len(os.Args) > 1 && os.Args[1] == "update" {
+		if err := runUpdate(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "paseo-tui update:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "Usage: paseo-tui [flags]\n       paseo-tui update [--check]\n\nFlags:")
+		flag.PrintDefaults()
+	}
 	host := flag.String("host", "", "daemon endpoint (host:port, tcp://, ssh, or pairing URL), e.g. 192.168.1.20:6767")
 	home := flag.String("home", "", "local daemon home (default ~/.paseo)")
 	node := flag.String("node", "", "JavaScript runtime for the bridge (default: node on PATH, else Paseo's built-in runtime)")
 	bridge := flag.String("bridge", "", "path to paseo-bridge.mjs (default: the copy embedded in this binary)")
 	showVersion := flag.Bool("version", false, "print version")
+	noUpdateCheck := flag.Bool("no-update-check", false, "don't check for new releases (also: "+noCheckEnv+"=1)")
 	flag.Parse()
+	updateCheck = !*noUpdateCheck
 
 	if *showVersion {
 		fmt.Println("paseo-tui", version)

@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Update notices and `paseo-tui update`.** A daily background check shows `↑ vX.Y.Z available` in the
+  footer, and `paseo-tui update` installs the new release in place after verifying its signature and
+  checksum. Turn the check off with `--no-update-check` or `PASEO_TUI_NO_UPDATE_CHECK=1`.
+
 ### Security
 
 - Updated `golang.org/x/text` (GO-2026-5970) and `github.com/yuin/goldmark` (GO-2026-5320).

@@ -71,6 +71,11 @@ make test     # unit tests
 
    The notes come from the changelog section, and the run fails if that section is missing.
 
+The publish step also signs `checksums.txt` with the `RELEASE_SIGNING_KEY` secret of the `release`
+environment, and checks the signature against `keys/release.pub.pem` before anything is published.
+`paseo-tui update` refuses releases without a valid signature. If the key ever has to change, ship a release
+that embeds both the old and the new public key before signing with the new one.
+
 A published release is never changed. If something is wrong, tag a new patch version. If a run fails
 before publishing, fix the cause and use **Re-run all jobs**: the leftover draft is replaced.
 

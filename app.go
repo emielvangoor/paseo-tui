@@ -76,6 +76,8 @@ type Model struct {
 	cfg BridgeConfig
 	br  *Bridge
 
+	updateAvail string // a newer release, from the background update check
+
 	width, height int
 	focus         focus
 	overlay       overlay
@@ -195,7 +197,7 @@ func NewModel(cfg BridgeConfig) Model {
 func (m Model) Init() tea.Cmd {
 	// Init has a value receiver, so the bridge is started from Update where state sticks.
 	start := func() tea.Msg { return bridgeRestartMsg{} }
-	return tea.Batch(start, m.spin.Tick, tea.SetWindowTitle("paseo"))
+	return tea.Batch(start, m.spin.Tick, tea.SetWindowTitle("paseo"), checkForUpdateCmd())
 }
 
 // ---------- bridge plumbing ----------
@@ -838,6 +840,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.br, m.connected = nil, false
 		return m, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return bridgeRestartMsg{} })
+
+	case updateAvailableMsg:
+		m.updateAvail = msg.version
+		return m, nil
 
 	case bridgeRestartMsg:
 		if m.br == nil {
@@ -1875,6 +1881,9 @@ func (m Model) viewFooter() string {
 		if right != "" && m.focus == focusInput {
 			right = sMuted.Render("esc, then ") + right
 		}
+	}
+	if right == "" && m.updateAvail != "" {
+		right = sBlue.Render("↑ "+m.updateAvail+" available") + sMuted.Render(" · run paseo-tui update")
 	}
 	left = truncate(left, max(10, m.width-lipgloss.Width(right)-3))
 	return left + strings.Repeat(" ", max(1, m.width-lipgloss.Width(left)-lipgloss.Width(right)-1)) + right

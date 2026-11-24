@@ -28,6 +28,8 @@ Thumbs.db
 .env.*
 *.pem
 *.key
+# …except the public key that verifies release signatures
+!keys/release.pub.pem
 
 # ── Tooling ───────────────────────────────────────────────────
 .claude/settings.local.json
