@@ -1,0 +1,33 @@
+# ── Build output ──────────────────────────────────────────────
+/paseo-tui
+/paseo-tui.exe
+/dist/
+*.test
+*.out
+coverage.*
+
+# ── Generated bridge (built by `make bridge`, embedded at compile time) ──
+/bridge/dist/
+/bridge/package.json
+
+# ── Fetched Paseo source used to build the bridge ─────────────
+/.paseo-src/
+node_modules/
+
+# ── Editors & OS ──────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Local env & secrets: never commit ─────────────────────────
+.env
+.env.*
+*.pem
+*.key
+
+# ── Tooling ───────────────────────────────────────────────────
+.claude/settings.local.json

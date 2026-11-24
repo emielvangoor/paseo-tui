@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bridge:
+    name: Bridge bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The bundle only changes with the bridge source, the build script or the pinned Paseo version.
+      - name: Restore bridge bundle
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            bridge/dist
+            bridge/package.json
+          key: bridge-${{ hashFiles('bridge/bridge.ts', 'scripts/build-bridge.sh', 'Makefile') }}
+
+      - name: Build bridge (fetches Paseo source)
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: make bridge
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bridge
+          path: |
+            bridge/dist
+            bridge/package.json
+          retention-days: 3
+
+  test:
+    name: Test (${{ matrix.os }})
+    needs: bridge
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge
+          path: bridge
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: |
+          unformatted=$(gofmt -l *.go)
+          if [ -n "$unformatted" ]; then echo "Run 'make fmt' on:"; echo "$unformatted"; exit 1; fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test (race detector)
+        if: runner.os != 'Windows'
+        run: go test -race ./...
+
+      - name: go test
+        if: runner.os == 'Windows'
+        run: go test ./...
+
+  cross-build:
+    name: Cross-build all platforms
+    needs: bridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: bridge
+          path: bridge
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # make sees the restored bundle as up to date
+      - run: touch bridge/dist/paseo-bridge.mjs
+
+      - name: Build release archives
+        run: make release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: paseo-tui-snapshot
+          path: dist/*
+          retention-days: 7
