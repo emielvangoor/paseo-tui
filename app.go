@@ -125,6 +125,7 @@ type Model struct {
 	projects      []*projView
 	pinned        []*wsView
 	selWS         string
+	title         string            // last terminal title sent
 	lastTab       map[string]string // workspace -> last focused agent tab
 	cursor        int
 	rows          []row
@@ -809,7 +810,55 @@ func (m *Model) refreshViewport() {
 
 // ---------- update ----------
 
+// Update handles a message, then keeps the terminal title on the selected workspace and tab.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.update(msg)
+	nm, ok := next.(Model)
+	if !ok {
+		return next, cmd
+	}
+	if t := nm.windowTitle(); t != nm.title {
+		nm.title = t
+		cmd = tea.Batch(cmd, tea.SetWindowTitle(t))
+	}
+	return nm, cmd
+}
+
+// windowTitle is "workspace · tab — project", or "paseo-tui" with nothing selected.
+func (m *Model) windowTitle() string {
+	v := m.wsViews[m.selWS]
+	if v == nil {
+		return "paseo-tui"
+	}
+	t := titleSafe(v.ws.DisplayName(), 40)
+	if a := m.current(); a != nil {
+		if l := titleSafe(agentLabel(*a), 30); l != "" && l != t {
+			t += " · " + l
+		}
+	}
+	return t + " — " + titleSafe(v.ws.ProjectName(), 30)
+}
+
+// titleSafe drops control characters, so a name can't end the title escape sequence and
+// inject its own, and cuts it to max characters.
+func titleSafe(s string, max int) string {
+	var b strings.Builder
+	n := 0
+	for _, r := range s {
+		if r < 0x20 || (r >= 0x7f && r < 0xa0) {
+			continue
+		}
+		if n == max {
+			b.WriteRune('…')
+			break
+		}
+		b.WriteRune(r)
+		n++
+	}
+	return b.String()
+}
+
+func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height

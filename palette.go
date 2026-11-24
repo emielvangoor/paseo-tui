@@ -158,7 +158,7 @@ func (p *Palette) move(dir int) {
 // Update returns (done, pick, cmd).
 func (p *Palette) Update(k tea.KeyMsg) (bool, *palettePick, tea.Cmd) {
 	switch k.String() {
-	case "esc", "ctrl+c", "ctrl+p":
+	case "esc", "ctrl+c":
 		return true, nil, nil
 	case "enter":
 		if !p.selectable(p.sel) {
@@ -176,7 +176,7 @@ func (p *Palette) Update(k tea.KeyMsg) (bool, *palettePick, tea.Cmd) {
 	case "down", "ctrl+n", "ctrl+j", "tab":
 		p.move(1)
 		return false, nil, nil
-	case "up", "ctrl+k", "shift+tab":
+	case "up", "ctrl+p", "ctrl+k", "shift+tab":
 		p.move(-1)
 		return false, nil, nil
 	}

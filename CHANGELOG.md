@@ -6,8 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-24
+
+### Added
+
+- The terminal title follows the selection: `workspace · agent tab — project`. It is cleared when
+  paseo-tui exits.
+
 ### Changed
 
+- In the command center, `ctrl+p` moves up (like `ctrl+n` moves down) instead of closing it. `esc` closes it.
 - The AUR package isn't published yet, because it has no maintainer
   ([#8](https://github.com/emielvangoor/paseo-tui/issues/8)). The 0.3.0 notes listed it by mistake.
   Releases skip the AUR until it's set up.
@@ -79,7 +87,8 @@ The first public release.
 - **Self-contained binaries** for macOS, Linux and Windows (arm64 and amd64). The bridge is embedded,
   and Paseo's own runtime is used when Node.js isn't installed.
 
-[Unreleased]: https://github.com/emielvangoor/paseo-tui/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/emielvangoor/paseo-tui/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/emielvangoor/paseo-tui/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/emielvangoor/paseo-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/emielvangoor/paseo-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/emielvangoor/paseo-tui/releases/tag/v0.1.0

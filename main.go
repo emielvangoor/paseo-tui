@@ -57,7 +57,9 @@ func main() {
 	}
 
 	p := tea.NewProgram(NewModel(cfg), tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	_, err = p.Run()
+	fmt.Print("\x1b]2;\x07") // clear the title we set, so the terminal or shell shows its own again
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "paseo-tui:", err)
 		os.Exit(1)
 	}
