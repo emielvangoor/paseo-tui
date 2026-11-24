@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-24
+
 ### Added
 
 - **Package managers.** Install with Homebrew (`brew install emielvangoor/tap/paseo-tui`, macOS and Linux),
@@ -71,6 +73,7 @@ The first public release.
 - **Self-contained binaries** for macOS, Linux and Windows (arm64 and amd64). The bridge is embedded,
   and Paseo's own runtime is used when Node.js isn't installed.
 
-[Unreleased]: https://github.com/emielvangoor/paseo-tui/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/emielvangoor/paseo-tui/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/emielvangoor/paseo-tui/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/emielvangoor/paseo-tui/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/emielvangoor/paseo-tui/releases/tag/v0.1.0
