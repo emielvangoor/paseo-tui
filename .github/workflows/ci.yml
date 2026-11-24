@@ -38,7 +38,7 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: make bridge
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bridge
           path: |
@@ -107,7 +107,7 @@ jobs:
       - name: Build release archives
         run: make release
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: paseo-tui-snapshot
           path: dist/*
