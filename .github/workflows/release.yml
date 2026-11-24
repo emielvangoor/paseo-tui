@@ -139,8 +139,12 @@ jobs:
             echo "Replacing the draft left by an earlier attempt"
             gh release delete "$TAG" --yes
           fi
-          pre=""; case "$TAG" in *-*) pre="--prerelease" ;; esac
+          # Tags with a suffix (v0.2.0-rc.1) are pre-releases and never become "latest".
+          case "$TAG" in
+            *-*) kind=--prerelease; latest=--latest=false ;;
+            *) kind=--prerelease=false; latest=--latest ;;
+          esac
           # Upload everything to a draft first, so a release is never visible half-uploaded.
           gh release create "$TAG" dist/*.tar.gz dist/*.zip dist/checksums.txt \
-            --draft --verify-tag $pre --title "paseo-tui $TAG" --notes-file notes.md
-          gh release edit "$TAG" --draft=false $( [ -z "$pre" ] && echo --latest )
+            --draft --verify-tag "$kind" --title "paseo-tui $TAG" --notes-file notes.md
+          gh release edit "$TAG" --draft=false "$latest"
