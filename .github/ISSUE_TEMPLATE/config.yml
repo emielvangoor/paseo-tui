@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Problems with Paseo itself
+    url: https://github.com/getpaseo/paseo/issues
+    about: Daemon, providers or the desktop app. paseo-tui is an independent client.

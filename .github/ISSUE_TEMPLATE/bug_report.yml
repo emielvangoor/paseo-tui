@@ -1,0 +1,51 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report this! The more detail, the faster it gets fixed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Run `paseo-tui --host …`
+        2. Press `N`
+        3. …
+  - type: input
+    id: version
+    attributes:
+      label: paseo-tui version
+      description: Output of `paseo-tui --version`
+    validations:
+      required: true
+  - type: input
+    id: paseo
+    attributes:
+      label: Paseo daemon version
+      description: Output of `paseo status`, or the version shown in the desktop app
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Linux, Windows, Other]
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal
+      placeholder: e.g. Ghostty, Alacritty, iTerm2, Windows Terminal, inside tmux
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or logs
+      description: A screenshot helps a lot with rendering issues.

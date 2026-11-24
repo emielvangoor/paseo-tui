@@ -1,0 +1,18 @@
+paseo-tui
+Copyright 2026 Emiel van Goor
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+paseo-tui is an independent, community-built terminal client for Paseo. It is
+not affiliated with or endorsed by the Paseo project.
+
+Release binaries embed a JavaScript bundle ("the bridge") that is built from
+Paseo's source code, including its client, protocol, server and CLI packages:
+
+  Paseo
+  Copyright (c) 2025-present Mohamed Boudra
+  Licensed under the Apache License, Version 2.0
+  https://github.com/getpaseo/paseo
+
+Third-party components bundled with Paseo remain licensed under the licenses
+provided by their respective copyright holders.

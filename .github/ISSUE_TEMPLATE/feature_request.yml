@@ -1,0 +1,16 @@
+name: Feature request
+description: An idea to make paseo-tui better
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the workflow or problem. If the desktop app already does it, say how it works there.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How could it work in the terminal?
+      description: Keys, layout, mouse behaviour… rough ideas are fine.
