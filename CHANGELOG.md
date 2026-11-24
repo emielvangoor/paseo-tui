@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- The AUR package isn't published yet, because it has no maintainer
+  ([#8](https://github.com/emielvangoor/paseo-tui/issues/8)). The 0.3.0 notes listed it by mistake.
+  Releases skip the AUR until it's set up.
+
 ## [0.3.0] - 2026-11-24
 
 ### Added

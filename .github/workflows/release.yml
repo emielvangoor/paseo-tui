@@ -66,7 +66,6 @@ jobs:
 
           \`\`\`sh
           brew install emielvangoor/tap/paseo-tui                      # macOS, Linux
-          yay -S paseo-tui-bin                                         # Arch (AUR)
           scoop bucket add emielvangoor https://github.com/emielvangoor/scoop-bucket
           scoop install emielvangoor/paseo-tui                         # Windows
           \`\`\`
@@ -223,7 +222,14 @@ jobs:
         with:
           name: release
 
+      # The AUR channel is off until a maintainer is set up (issue #8): set the repository variable
+      # AUR_PUBLISH=true and the AUR_SSH_KEY secret to turn it on.
+      - name: AUR publishing is off
+        if: ${{ matrix.channel == 'aur' && vars.AUR_PUBLISH != 'true' }}
+        run: echo "::notice::Skipping the AUR; set the AUR_PUBLISH repository variable to true to publish there"
+
       - name: Push the ${{ matrix.channel }} manifest
+        if: ${{ matrix.channel != 'aur' || vars.AUR_PUBLISH == 'true' }}
         env:
           DEPLOY_KEY: ${{ secrets[matrix.secret] }}
         run: packaging/publish.sh "${{ matrix.channel }}" "${{ github.ref_name }}"
@@ -270,7 +276,7 @@ jobs:
     name: Verify AUR install
     needs: [publish, distribute]
     # Runs even if another channel failed; checks only its own.
-    if: ${{ always() && needs.publish.result == 'success' && !contains(github.ref_name, '-') }}
+    if: ${{ always() && needs.publish.result == 'success' && !contains(github.ref_name, '-') && vars.AUR_PUBLISH == 'true' }}
     runs-on: ubuntu-latest
     container: archlinux:base-devel
     timeout-minutes: 15

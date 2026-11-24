@@ -87,7 +87,7 @@ nfpm (`packaging/nfpm.yaml`) and renders the Homebrew formula, Scoop manifest an
 |---|---|---|
 | Homebrew | [emielvangoor/homebrew-tap](https://github.com/emielvangoor/homebrew-tap) | `HOMEBREW_TAP_DEPLOY_KEY`, a write deploy key of that repo |
 | Scoop | [emielvangoor/scoop-bucket](https://github.com/emielvangoor/scoop-bucket) | `SCOOP_BUCKET_DEPLOY_KEY`, a write deploy key of that repo |
-| AUR | [paseo-tui-bin](https://aur.archlinux.org/packages/paseo-tui-bin) | `AUR_SSH_KEY`, whose public key is on the maintainer's AUR account |
+| AUR (off, see [#8](https://github.com/emielvangoor/paseo-tui/issues/8)) | `paseo-tui-bin` | `AUR_SSH_KEY`, whose public key is on the maintainer's AUR account; also set the repository variable `AUR_PUBLISH=true` |
 
 Then the verify jobs install from each channel on a clean macOS, Windows and Arch Linux machine. If a
 channel fails, fix the cause and use **Re-run failed jobs**.

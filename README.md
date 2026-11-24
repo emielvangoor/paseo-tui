@@ -53,9 +53,6 @@ It works with your local Paseo daemon or any remote one, over SSH or the network
 # macOS and Linux: Homebrew
 brew install emielvangoor/tap/paseo-tui
 
-# Arch Linux: AUR
-yay -S paseo-tui-bin
-
 # Debian / Ubuntu, Fedora / RHEL / openSUSE, Alpine: the package from the latest release
 sudo apt install ./paseo-tui_*_amd64.deb      # or: sudo dnf install ./paseo-tui-*.x86_64.rpm
                                               # or: sudo apk add --allow-untrusted ./paseo-tui_*.apk
@@ -67,9 +64,13 @@ scoop bucket add emielvangoor https://github.com/emielvangoor/scoop-bucket
 scoop install emielvangoor/paseo-tui
 ```
 
-Each new release updates the Homebrew tap, the Scoop bucket and the AUR package automatically, so
-`brew upgrade`, `scoop update` or your AUR helper picks it up. The `.deb`, `.rpm` and `.apk` files are
-attached to every [release](https://github.com/emielvangoor/paseo-tui/releases/latest).
+Each new release updates the Homebrew tap and the Scoop bucket automatically, so `brew upgrade` and
+`scoop update` pick it up. The `.deb`, `.rpm` and `.apk` files are attached to every
+[release](https://github.com/emielvangoor/paseo-tui/releases/latest).
+
+**Arch Linux:** there's no AUR package yet; see [#8](https://github.com/emielvangoor/paseo-tui/issues/8) if
+you'd like to maintain one. Until then, use the [prebuilt binary](#prebuilt-binaries) (or Homebrew), and
+`paseo-tui update` keeps it current.
 
 ### Prebuilt binaries
 
