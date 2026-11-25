@@ -6,6 +6,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- The focused agent's model and thinking level show at the right end of the tab bar
+  (e.g. `Claude Opus 5.5 · high`). They take no extra space and are left out when the tabs need the room.
+
 ## [0.6.0] - 2026-11-25
 
 ### Added

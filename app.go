@@ -458,7 +458,11 @@ func (m *Model) watch() tea.Cmd {
 		return tea.Batch(unwatch, m.fetchSubTimeline(*ref))
 	}
 	seen := m.markSeen()
-	return tea.Batch(seen, m.fetchSubagents(id), func() tea.Msg {
+	var models tea.Cmd // labels for the model badge in the tab bar
+	if a := m.agentByID(id); a != nil {
+		models = m.loadModels(a.Snap.Provider)
+	}
+	return tea.Batch(seen, models, m.fetchSubagents(id), func() tea.Msg {
 		if _, err := br.Call("watch", map[string]any{"agentId": id, "tail": historyTail}, 30*time.Second); err != nil {
 			return actionDoneMsg{what: "Load transcript", err: err}
 		}
@@ -2525,7 +2529,43 @@ func (m Model) tabLayout(v *wsView, w int) (string, []tabSpan) {
 		line += tabs[i].s + sep
 		col += tabs[i].w + 1
 	}
-	return line + newTab, spans
+	line += newTab
+	// the focused agent's model and thinking level, right-aligned when there's room
+	if badge := m.modelBadge(); badge != "" {
+		if gap := w - lipgloss.Width(line) - lipgloss.Width(badge) - 1; gap >= 2 {
+			line += strings.Repeat(" ", gap) + badge
+		}
+	}
+	return line, spans
+}
+
+// modelBadge is "model · thinking level" of the focused agent tab, in the
+// labels the provider lists when its models are loaded.
+func (m Model) modelBadge() string {
+	a := m.current()
+	if a == nil || m.selSub != nil {
+		return ""
+	}
+	id := currentModel(a)
+	model, thinking := id, a.Thinking
+	if i := strings.LastIndex(model, "/"); i >= 0 {
+		model = model[i+1:] // "anthropic/claude-opus-5-5" -> "claude-opus-5-5"
+	}
+	for _, md := range m.modelCache[a.Snap.Provider] {
+		if md.ID != id {
+			continue
+		}
+		model = orDefault(md.Label, model)
+		for _, o := range md.ThinkingOptions {
+			if o.ID == thinking {
+				thinking = orDefault(o.Label, thinking)
+			}
+		}
+	}
+	if model == "" || model == "default" {
+		model = a.Snap.Provider
+	}
+	return sMuted.Render(model + " · " + strings.ToLower(thinking))
 }
 
 // closeTab closes a subagent tab (focused or not); agent tabs can't be closed.
