@@ -170,7 +170,7 @@ Press `?` inside the app for every shortcut.
 
 | Key | Action |
 |---|---|
-| `p` · `ctrl+p` · `/` | Command center: workspaces, agents, actions |
+| `p` · `ctrl+p` | Command center: workspaces, agents, actions |
 | `J` / `K` · `↑` / `↓` | Move through the sidebar |
 | `{` / `}` | Previous / next workspace in tree order (works with the sidebar hidden) |
 | `[` / `]` · `tab` · `alt+1…9` | Previous / next agent tab, or jump to tab N |
@@ -187,17 +187,20 @@ Press `?` inside the app for every shortcut.
 | Key | Action |
 |---|---|
 | `enter` · `i` | Write to the focused agent (`enter` sends, `alt+enter` adds a newline, `esc` leaves) |
+| `/` | The agent's commands and skills, as in the desktop: `/` at the start of a message lists both, `/` later in a message lists skills. Type to filter, `↑` / `↓` choose, `tab` or `enter` inserts, `esc` closes |
 | `↑` / `↓` (in the composer) | Previous / next prompt from history |
 | `ctrl+v` | Paste an image from the clipboard (pasting or dropping an image path works too) |
 | `n` · `ctrl+n` | New agent in this workspace (a new tab) |
 | `f` | Fork the agent: a new tab (or, via *Where*, a new workspace) with the same provider, model and mode that starts from its chat history |
 | `R` | Rename the agent (its tab) |
+| `H` | History, like the desktop's: every agent including archived ones, searchable; `enter` opens one, and restores it first (with its workspace or worktree) when archived |
 | `e` | Open the workspace in your editor in a floating pane: `$VISUAL`, `$EDITOR`, else nvim or vim (`ctrl+\` hides it, `e` brings it back, quitting the editor closes it). GUI editors need their terminal mode, e.g. `VISUAL="emacs -nw"` |
 | `F` | Browse the workspace's files in a floating pane with ranger, yazi, lf or nnn (the first one installed; `ctrl+\` hides it, `F` brings it back). Without one, opens the directory in Finder, Explorer or the Linux file manager |
 | `N` | New workspace (project directory or worktree, branch, provider, model, thinking) |
 | `m` | Agent settings: model, thinking level, mode, toggles such as Fast |
 | `s` | Interrupt the running agent |
 | `y` / `x` | Allow / deny a pending tool permission |
+| `enter` · `y` (question) | Answer the agent's question (e.g. Claude's AskUserQuestion): pick an option or type your own answer; `x` dismisses it |
 | `u` | Subagents of this agent; open one as a `↳` tab (`ctrl+w` closes it) |
 | `a` | Archive the agent or the workspace, or remove a project (always confirms) |
 | `D` | Delete the agent permanently |

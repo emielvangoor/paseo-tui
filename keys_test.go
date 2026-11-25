@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -56,5 +57,64 @@ func TestPaneKeySeq(t *testing.T) {
 	// plain cursor keys are left to the emulator, which knows the cursor-key mode
 	if _, code, ok := paneKeySeq(tea.KeyMsg{Type: tea.KeyUp}); ok || code == 0 {
 		t.Errorf("up: ok=%v code=%d, want the key code", ok, code)
+	}
+}
+
+func TestActiveSlash(t *testing.T) {
+	cases := []struct {
+		text  string
+		start int
+		query string
+		ok    bool
+	}{
+		{"/rev", 0, "rev", true},
+		{"/", 0, "", true},
+		{"fix it /sk", 7, "sk", true},
+		{"a/b", 0, "", false},         // not after a space
+		{"/review now", 0, "", false}, // the cursor is past the command
+		{"say \"/x", 0, "", false},    // quoted
+	}
+	for _, c := range cases {
+		line := []rune(c.text)
+		start, query, ok := activeSlash(line, len(line))
+		if ok != c.ok || (ok && (start != c.start || query != c.query)) {
+			t.Errorf("%q: got (%d, %q, %v), want (%d, %q, %v)", c.text, start, query, ok, c.start, c.query, c.ok)
+		}
+	}
+	cmds := []slashCommand{{Name: "review"}, {Name: "skill:preview", Kind: "skill"}, {Name: "rev"}}
+	got := rankCommands(cmds, "rev", false)
+	if len(got) != 3 || got[0].Name != "rev" || got[1].Name != "review" {
+		t.Errorf("ranking: %+v", got)
+	}
+	if got := rankCommands(cmds, "", true); len(got) != 1 || got[0].Name != "skill:preview" {
+		t.Errorf("inline lists only skills: %+v", got)
+	}
+}
+
+// Answers go back keyed by header: a choice's label, a typed answer replacing it
+// for single choice and joining the choices for multiple choice.
+func TestQuestionAnswers(t *testing.T) {
+	qs := parseQuestions(json.RawMessage(`{"questions":[
+		{"question":"Pick a color","header":"Color","options":[{"label":"Red"},{"label":"Green"}],"allowOther":true},
+		{"question":"Toppings?","header":"Toppings","multiSelect":true,"options":[{"label":"Cheese"},{"label":"Ham"}],"allowOther":true},
+		{"question":"Anything else?","header":"Note","options":[],"allowEmpty":true}]}`))
+	if len(qs) != 3 {
+		t.Fatalf("parsed %d questions", len(qs))
+	}
+	m := Model{perms: map[string][]PermissionReq{}}
+	mm, _ := m.openQuestion("a", PermissionReq{ID: "r"}, qs)
+	f := mm.(Model).question
+	f.picked[0][1] = true
+	f.picked[1][0], f.picked[1][1] = true, true
+	f.text[1].SetValue("Pineapple")
+	got := f.answers()
+	want := map[string]string{"Color": "Green", "Toppings": "Cheese, Ham, Pineapple", "Note": ""}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s: got %q, want %q", k, got[k], v)
+		}
+	}
+	if parseQuestions(json.RawMessage(`{"questions":[{"question":"x"}]}`)) != nil {
+		t.Error("a question without header and options should not parse")
 	}
 }

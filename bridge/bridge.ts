@@ -16,6 +16,7 @@ console.debug = toStderr;
 import { createInterface } from "node:readline";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { connectToDaemon } from "paseo-cli/utils/client.js";
 import { selectDaemonTarget, describeDaemonTarget } from "paseo-cli/utils/daemon-target.js";
 import { fetchProjectedTimelineItems } from "paseo-cli/utils/timeline.js";
@@ -358,8 +359,51 @@ async function handle(req: Json): Promise<unknown> {
       if (!r.attachment) throw new Error("the daemon returned no chat history");
       return { attachment: r.attachment, itemCount: r.itemCount };
     }
+    case "history": {
+      // the desktop's History: every agent, archived ones included, most recently active first
+      const r = (await need().fetchAgentHistory({
+        filter: { includeArchived: true },
+        ...(req.search ? { search: req.search as string } : {}),
+        sort: [{ key: "updated_at", direction: "desc" }],
+        page: { limit: 100 },
+      } as never)) as unknown as Json;
+      return ((r.entries as Json[]) ?? []).map((e) => ({ ...(e.agent as Json), project: e.project ?? null }));
+    }
+    case "revive": {
+      // bring an archived agent back: its workspace first (recreating a worktree), then the agent
+      const c = need();
+      const workspaceId = req.workspaceId as string;
+      if (workspaceId && c.getLastServerInfoMessage()?.features?.workspaceRecovery) {
+        const state = (await c.inspectWorkspaceRecovery(workspaceId)) as unknown as Json;
+        if (state.kind === "recoverable") await c.restoreWorkspace(workspaceId);
+      }
+      if (req.archived) {
+        try {
+          await c.refreshAgent(agentId);
+        } catch (err) {
+          // the daemon unarchives before reloading; an agent that never ran has nothing to
+          // reload, which is fine as long as it's back in the list
+          for (let i = 0; i < 10 && !agents.get(agentId); i++) await sleep(100);
+          const back = agents.get(agentId);
+          if (!back || back.archivedAt) throw err;
+        }
+      }
+      return null;
+    }
     case "rename":
       return need().updateAgent(agentId, { name: req.name as string });
+    case "commands": {
+      // the agent's slash commands and skills, as the desktop's composer lists them
+      const r = (await need().listCommands({ agentId })) as unknown as Json;
+      if (r.error) throw new Error(String(r.error));
+      const seen = new Set<string>();
+      return ((r.commands as Json[]) ?? []).filter((c) => {
+        const name = String(c.name);
+        if (seen.has(name)) return false; // older daemons can list a command twice
+        seen.add(name);
+        return true;
+      });
+    }
     case "seen":
       return need().clearAgentAttention(agentId);
     case "cancel":
@@ -369,10 +413,11 @@ async function handle(req: Json): Promise<unknown> {
     case "delete":
       return need().deleteAgent(agentId);
     case "permit":
+      // a full response (a question's answers) when given, else plain allow / deny
       return need().respondToPermissionAndWait(
         agentId,
         req.requestId as string,
-        req.allow ? { behavior: "allow" } : ({ behavior: "deny" } as never),
+        (req.response ?? (req.allow ? { behavior: "allow" } : { behavior: "deny" })) as never,
       );
     case "archived":
       includeArchived = Boolean(req.value);

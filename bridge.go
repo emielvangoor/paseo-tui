@@ -120,9 +120,11 @@ type ProjectPlacement struct {
 type PermissionReq struct {
 	ID          string          `json:"id"`
 	Name        string          `json:"name"`
+	Kind        string          `json:"kind"` // tool | plan | question | mode | other
 	Title       string          `json:"title"`
 	Description string          `json:"description"`
 	Detail      json.RawMessage `json:"detail"`
+	Input       json.RawMessage `json:"input"` // a question's questions; echoed back with the answers
 }
 
 func StartBridge(node, script string, args, env []string) (*Bridge, error) {

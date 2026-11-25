@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -174,6 +175,16 @@ type wsView struct {
 	since    time.Time // when it entered that state
 	activity time.Time
 	running  time.Time // turn start of the running agent, if any
+	num      int       // position under its sidebar heading (project, status or Pinned), from 1
+}
+
+// title is the workspace's name with its position under its sidebar heading,
+// e.g. "2. main", so moving through the sidebar shows which way you're going.
+func (v *wsView) title() string {
+	if v.num == 0 {
+		return v.ws.DisplayName()
+	}
+	return fmt.Sprintf("%d. %s", v.num, v.ws.DisplayName())
 }
 
 type projView struct {

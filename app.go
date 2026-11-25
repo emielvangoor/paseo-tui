@@ -40,6 +40,8 @@ const (
 	ovProject
 	ovRename
 	ovPane
+	ovQuestion
+	ovHistory
 )
 
 // ---------- messages ----------
@@ -155,6 +157,8 @@ type Model struct {
 	projForm       *ProjectForm
 	renaming       *renameForm
 	panes          map[paneID]*termPane // floating terminal panes (e editor, F files) per workspace, also while hidden
+	question       *questionForm        // the open answer form of an agent's question
+	history        *historyList         // History (H): all agents, archived ones included
 	paneShown      paneID               // which one ovPane shows
 	pendingNewForm *NewAgentForm        // New workspace form waiting for "+ Add project…" to finish
 	detailsScroll  int                  // scroll offset of the details panel
@@ -162,6 +166,12 @@ type Model struct {
 	modelCache     map[string][]ModelInfo // provider -> models
 	vpLines        []string               // rendered transcript lines, for mouse selection
 	hist           *promptHistory
+	// slash commands in the composer
+	slash          *slashMenu
+	slashDismissed string                    // the slash list closed with esc, until its "/" goes away
+	commands       map[string][]slashCommand // agent -> its commands and skills
+	cmdLoading     map[string]bool
+	cmdErr         map[string]string
 }
 
 func NewModel(cfg BridgeConfig) Model {
@@ -194,6 +204,9 @@ func NewModel(cfg BridgeConfig) Model {
 		hist:       loadHistory(),
 		modelCache: map[string][]ModelInfo{},
 		panes:      map[paneID]*termPane{},
+		commands:   map[string][]slashCommand{},
+		cmdLoading: map[string]bool{},
+		cmdErr:     map[string]string{},
 		wsViews:    map[string]*wsView{},
 		timeline:   NewTimeline(),
 		render:     NewRenderer(lipgloss.HasDarkBackground()),
@@ -292,6 +305,18 @@ func (m *Model) handleBridge(b BridgeMsg) tea.Cmd {
 				p.started = *s.ActiveTurn.StartedAt
 			} else if p, ok := m.progress[a.ID]; ok && s.Status != "running" {
 				p.started = time.Time{}
+			}
+		}
+		if f := m.question; f != nil { // answered or withdrawn elsewhere: close the form
+			still := false
+			for _, p := range m.perms[f.agentID] {
+				still = still || p.ID == f.requestID
+			}
+			if !still {
+				m.question = nil
+				if m.overlay == ovQuestion {
+					m.overlay = ovNone
+				}
 			}
 		}
 		return m.reconcile(hadPerm)
@@ -694,7 +719,7 @@ func (m *Model) stepTree(dir int) tea.Cmd {
 	v := order[next]
 	m.revealWorkspace(v)
 	m.sideScroll = 0
-	m.setStatus(fmt.Sprintf("%s › %s  ·  %d/%d", v.ws.ProjectName(), v.ws.DisplayName(), next+1, len(order)), false)
+	m.setStatus(fmt.Sprintf("%s › %s  ·  %d/%d", v.ws.ProjectName(), v.title(), next+1, len(order)), false)
 	return m.selectWorkspace(v.ws.ID, "")
 }
 
@@ -936,6 +961,46 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.form.err = "providers: " + msg.err.Error()
 		}
 		return m, nil
+
+	case historyMsg:
+		if h := m.history; h != nil && msg.gen == h.gen {
+			h.loading, h.err = false, ""
+			if msg.err != nil {
+				h.err = msg.err.Error()
+			}
+			h.entries = msg.entries
+			h.sel = min(h.sel, max(0, len(h.entries)-1))
+		}
+		return m, nil
+
+	case historySearchMsg:
+		if h := m.history; h != nil && msg.gen == h.gen {
+			h.loading = true
+			return m, m.loadHistory(msg.gen, strings.TrimSpace(h.search.Value()))
+		}
+		return m, nil
+
+	case reviveDoneMsg:
+		if msg.err != nil {
+			m.setStatus("Restore failed: "+msg.err.Error(), true)
+			return m, nil
+		}
+		m.setStatus("Restored "+truncate(msg.name, 40), false)
+		return m, m.selectAgent(msg.agentID)
+
+	case commandsMsg:
+		delete(m.cmdLoading, msg.agentID)
+		if msg.err != nil {
+			m.cmdErr[msg.agentID] = msg.err.Error()
+		} else {
+			m.commands[msg.agentID] = msg.cmds
+			delete(m.cmdErr, msg.agentID)
+		}
+		var cmd tea.Cmd
+		if m.slash != nil {
+			cmd = m.refreshSlash()
+		}
+		return m, cmd
 
 	case subagentListMsg:
 		if msg.err == nil {
@@ -1196,6 +1261,10 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.projectFormKey(k)
 	case ovRename:
 		return m, m.renameKey(k)
+	case ovQuestion:
+		return m, m.questionKey(k)
+	case ovHistory:
+		return m, m.historyKey(k)
 	case ovSubs:
 		done, pick := m.subList.Update(k)
 		if done {
@@ -1286,6 +1355,9 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focus == focusInput {
+		if m.slash != nil && m.slashKey(k) {
+			return m, nil
+		}
 		if k.Paste {
 			if paths := imagePathsIn(string(k.Runes)); len(paths) > 0 {
 				m.attach(paths...)
@@ -1334,7 +1406,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "shift+tab":
 			return m, m.cycleTab(-1)
 		case "esc":
-			m.focus = focusList
+			m.focus, m.slash = focusList, nil
 			m.input.Blur()
 			m.hist.reset()
 			return m, nil
@@ -1365,7 +1437,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.input.SetHeight(composerMaxLines) // edit at full height so the box never scrolls when it fits
 		m.input, c = m.input.Update(k)
 		m.fitInput()
-		return m, c
+		cmd := m.refreshSlash()
+		return m, tea.Batch(c, cmd)
 	}
 
 	a := m.current()
@@ -1374,8 +1447,23 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "?":
 		m.overlay = ovHelp
-	case "p", "ctrl+p", "/":
+	case "p", "ctrl+p":
 		return m.openPalette()
+	case "/":
+		// write a slash command to the agent; without one, the command center
+		if a == nil || m.selSub != nil {
+			return m.openPalette()
+		}
+		v := m.input.Value()
+		if v != "" && !strings.HasSuffix(v, " ") && !strings.HasSuffix(v, "\n") {
+			v += " "
+		}
+		m.input.SetHeight(composerMaxLines)
+		m.input.SetValue(v + "/")
+		m.fitInput()
+		m.focus = focusInput
+		cmd := tea.Batch(m.input.Focus(), m.refreshSlash())
+		return m, cmd
 	case "J", "down":
 		if m.state.HideSidebar {
 			return m, m.stepWorkspace(1)
@@ -1489,6 +1577,9 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if a != nil {
+			if p, qs, ok := m.pendingQuestion(a.ID); ok {
+				return m.openQuestion(a.ID, p, qs)
+			}
 			m.focus = focusInput
 			return m, m.input.Focus()
 		}
@@ -1504,6 +1595,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openFork()
 	case "R":
 		return m.openRename()
+	case "H":
+		return m.openHistory()
 	case "e":
 		return m.openPane(paneEditor)
 	case "F":
@@ -1537,6 +1630,12 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "y", "x":
 		if a != nil && len(m.perms[a.ID]) > 0 {
+			if p, qs, ok := m.pendingQuestion(a.ID); ok {
+				if k.String() == "y" {
+					return m.openQuestion(a.ID, p, qs)
+				}
+				return m, m.dismissQuestion(a.ID, p, qs)
+			}
 			p := m.perms[a.ID][0]
 			allow := k.String() == "y"
 			verb := map[bool]string{true: "Allowed", false: "Denied"}[allow]
@@ -2018,6 +2117,10 @@ func (m Model) View() string {
 		return m.centerOver(screen, m.renameView())
 	case ovPane:
 		return m.centerOver(screen, m.paneView())
+	case ovQuestion:
+		return m.centerOver(screen, m.questionView())
+	case ovHistory:
+		return m.centerOver(screen, m.historyView())
 	}
 	return screen
 }
@@ -2057,6 +2160,9 @@ func (m Model) viewFooter() string {
 		switch {
 		case len(m.perms[a.ID]) > 0:
 			right = sGreen.Render("y allow") + sMuted.Render(" · ") + sRed.Render("x deny")
+			if _, _, ok := m.pendingQuestion(a.ID); ok {
+				right = sGreen.Render("enter answer") + sMuted.Render(" · ") + sRed.Render("x dismiss")
+			}
 		case a.Status == "running":
 			right = sMuted.Render("s interrupt")
 		case len(m.subagentsOf(a.ID)) > 0:
@@ -2114,7 +2220,7 @@ func (m Model) viewMain(h int) string {
 
 	// workspace line: project › workspace, branch, PR, diff
 	ws := v.ws
-	wsParts := []string{sMuted.Render(ws.ProjectName()+" ›") + " " + sBold.Render(ws.DisplayName())}
+	wsParts := []string{sMuted.Render(ws.ProjectName()+" ›") + " " + sBold.Render(v.title())}
 	if b := ws.Branch(); b != "" && b != ws.DisplayName() {
 		wsParts = append(wsParts, sMuted.Render("⎇ "+b))
 	} else if ws.IsWorktree() {
@@ -2170,7 +2276,12 @@ func (m Model) viewMain(h int) string {
 	_ = info // the full agent status lives in the details panel (d)
 	head := lipgloss.NewStyle().MaxWidth(w).Render(wsLine + "\n" + tabBar)
 
-	parts := []string{head, m.viewportView()}
+	vp := m.viewportView()
+	if m.slash != nil && m.focus == focusInput {
+		box := m.slashView(w)
+		vp = floatOver(vp, box, 0, max(0, strings.Count(vp, "\n")+1-lipgloss.Height(box)))
+	}
+	parts := []string{head, vp}
 
 	if perms := m.perms[a.ID]; len(perms) > 0 {
 		p := perms[0]
@@ -2179,9 +2290,18 @@ func (m Model) viewMain(h int) string {
 			more = sMuted.Render(fmt.Sprintf("  (+%d more)", len(perms)-1))
 		}
 		desc := permissionSummary(p)
+		head := sRed.Bold(true).Render("⚠ Permission: ") + sBold.Render(p.Name) + more
+		keys := sGreen.Render("y allow") + sMuted.Render(" · ") + sRed.Render("x deny")
+		if qp, qs, ok := m.pendingQuestion(a.ID); ok {
+			p, desc = qp, qs[0].Question
+			if desc == p.Title {
+				desc = p.Description // the options, e.g. "Red / Green / Blue"
+			}
+			head = sYellow.Bold(true).Render("? Question: ") + sBold.Render(orDefault(p.Title, orDefault(qs[0].Header, p.Name))) + more
+			keys = sGreen.Render("enter answer") + sMuted.Render(" · ") + sRed.Render("x dismiss")
+		}
 		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).Width(w - 3).Render(
-			sRed.Bold(true).Render("⚠ Permission: ") + sBold.Render(p.Name) + more + "\n" +
-				truncate(firstLine(desc), w-24) + "   " + sGreen.Render("y allow") + sMuted.Render(" · ") + sRed.Render("x deny"))
+			head + "\n" + truncate(firstLine(desc), w-24) + "   " + keys)
 		parts = append(parts, box)
 	}
 
@@ -2540,7 +2660,7 @@ func shortHome(p string) string {
 
 func helpBox() string {
 	rows := [][2]string{
-		{"p, ctrl+p, /", "command center: workspaces, agents, actions"},
+		{"p, ctrl+p", "command center: workspaces, agents, actions"},
 		{"J / K, ↑ / ↓", "move through projects and workspaces"},
 		{"{ / }", "previous / next workspace in the tree (works with the sidebar hidden)"},
 		{"h / l, ← / →", "collapse / expand project"},
@@ -2559,6 +2679,7 @@ func helpBox() string {
 		{"w, ctrl+w, middle-click", "close a subagent tab (or click its ×)"},
 		{"click a tab", "switch to it"},
 		{"enter, i", "write a message to the agent"},
+		{"/", "commands and skills of the agent (also typed in the message box)"},
 		{"ctrl+v", "paste an image (or paste/drop an image path)"},
 		{"n, ctrl+n", "new agent (in this workspace, or a new one)"},
 		{"N", "new workspace: project, project directory or new worktree, start branch, model"},
@@ -2566,10 +2687,12 @@ func helpBox() string {
 		{"mouse drag", "select transcript text (copied on release)"},
 		{"s", "interrupt running agent"},
 		{"y / x", "allow / deny pending permission"},
+		{"enter (question)", "answer the agent's question; x dismisses it"},
 		{"a", "archive agent / workspace, or remove project"},
 		{"D", "delete agent"},
 		{"f", "fork the agent: a new tab (or workspace) that starts from its chat history"},
 		{"R", "rename the agent (its tab)"},
+		{"H", "history: every agent, archived ones too; enter opens or restores one"},
 		{"e", "edit the workspace in $VISUAL / $EDITOR, in a floating pane (ctrl+\\ hides it)"},
 		{"F", "browse files in ranger / yazi / lf / nnn in a floating pane (else Finder)"},
 		{"A", "toggle archived agents"},

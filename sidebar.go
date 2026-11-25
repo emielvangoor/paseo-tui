@@ -69,6 +69,9 @@ func (m *Model) rebuildRows() {
 				}
 				return list[i].ws.ProjectName()+list[i].ws.DisplayName() < list[j].ws.ProjectName()+list[j].ws.DisplayName()
 			})
+			for i, v := range list {
+				v.num = i + 1
+			}
 			title := bucketTitle[b]
 			// status headers fold like projects
 			hdr := row{kind: rowProject, key: "status:" + title, label: fmt.Sprintf("%s  %d", title, len(list)), sb: b}
@@ -83,12 +86,16 @@ func (m *Model) rebuildRows() {
 	} else {
 		if len(m.pinned) > 0 {
 			m.rows = append(m.rows, row{kind: rowSection, key: "pinned", label: "Pinned"})
-			for _, v := range m.pinned {
+			for i, v := range m.pinned {
+				v.num = i + 1
 				m.rows = append(m.rows, row{kind: rowWorkspace, key: v.ws.ID, ws: v, inPin: true})
 			}
 		}
 		for _, p := range m.projects {
 			m.rows = append(m.rows, row{kind: rowProject, key: p.id, label: p.name, project: p})
+			for i, v := range p.workspaces {
+				v.num = i + 1
+			}
 			if m.state.Collapsed[p.id] {
 				continue
 			}
@@ -321,7 +328,7 @@ func (m Model) renderRow(r row, sel bool, w int) []string {
 			indent = " "
 		}
 		left := cur + indent + m.bucketIcon(v.bucket, ws.WorkspaceKind) + " " +
-			nameSt.Render(truncate(name, w-7-len(indent)-lipgloss.Width(when)))
+			nameSt.Render(truncate(v.title(), w-7-len(indent)-lipgloss.Width(when)))
 		l1 := rightAlign(left, when, w)
 
 		var meta []string

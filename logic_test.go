@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -201,5 +202,34 @@ func TestForkedPromptCollapsesHistory(t *testing.T) {
 	tl.Apply(plain)
 	if e := tl.Entries[1]; e.Forked || e.Text != "mentions <chat-history-summary> mid-text" {
 		t.Fatalf("plain prompt changed: %+v", e)
+	}
+}
+
+// The subagent list puts the newest on top, children under their parent, and
+// mixes Paseo child agents and provider subagents by when they started.
+func TestSubagentsNewestFirst(t *testing.T) {
+	t0 := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	at := func(min int) flexTime { return flexTime{t0.Add(time.Duration(min) * time.Minute)} }
+	parent := "p1"
+	old := &ProviderSub{ID: "old", CreatedAt: at(1)}
+	child := &ProviderSub{ID: "child", ParentSubagent: &old.ID, CreatedAt: at(5)}
+	recent := &ProviderSub{ID: "recent", CreatedAt: at(3)}
+	m := Model{
+		agents: []Agent{{ID: "agent", CreatedAt: t0.Add(2 * time.Minute), Snap: Snapshot{Labels: map[string]string{parentLabel: parent}}}},
+		subs:   map[string]map[string]*ProviderSub{parent: {"old": old, "child": child, "recent": recent}},
+	}
+	var got []string
+	for _, e := range m.subagentsOf(parent) {
+		id := ""
+		if e.agent != nil {
+			id = e.agent.ID
+		} else {
+			id = e.sub.ID
+		}
+		got = append(got, strings.Repeat(">", e.depth)+id)
+	}
+	want := "recent agent old >child"
+	if strings.Join(got, " ") != want {
+		t.Fatalf("order %q, want %q", strings.Join(got, " "), want)
 	}
 }

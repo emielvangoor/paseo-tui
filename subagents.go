@@ -202,6 +202,13 @@ func (e subagentEntry) when() time.Time {
 	return e.sub.UpdatedAt.Time
 }
 
+func (e subagentEntry) created() time.Time {
+	if e.agent != nil {
+		return e.agent.CreatedAt
+	}
+	return e.sub.CreatedAt.Time
+}
+
 func (e subagentEntry) tab() tabItem {
 	if e.agent != nil {
 		return tabItem{agentID: e.agent.ID}
@@ -209,24 +216,34 @@ func (e subagentEntry) tab() tabItem {
 	return tabItem{sub: &subRef{ParentID: e.sub.ParentAgentID, SubID: e.sub.ID}}
 }
 
-// subagentsOf lists an agent's Paseo children and provider subagents, nested
-// subagents indented under the subagent that spawned them, oldest first.
+// subagentsOf lists an agent's Paseo children and provider subagents, newest
+// first, nested subagents indented under the subagent that spawned them.
 func (m *Model) subagentsOf(parentID string) []subagentEntry {
-	var out []subagentEntry
+	var roots []subagentEntry
 	for i := range m.agents {
 		if childOf(m.agents[i]) == parentID && m.agents[i].Snap.ArchivedAt == nil {
-			out = append(out, subagentEntry{agent: &m.agents[i]})
+			roots = append(roots, subagentEntry{agent: &m.agents[i]})
 		}
 	}
 	byParent := map[string][]*ProviderSub{}
 	for _, s := range m.subs[parentID] {
-		byParent[deref(s.ParentSubagent)] = append(byParent[deref(s.ParentSubagent)], s)
+		p := deref(s.ParentSubagent)
+		if p != "" && m.subs[parentID][p] == nil {
+			p = "" // its parent subagent is unknown: list it at the top level
+		}
+		byParent[p] = append(byParent[p], s)
 	}
 	for _, list := range byParent {
-		sort.SliceStable(list, func(i, j int) bool { return list[i].CreatedAt.Before(list[j].CreatedAt.Time) })
+		sort.SliceStable(list, func(i, j int) bool { return list[i].CreatedAt.After(list[j].CreatedAt.Time) })
 	}
-	var walk func(parent string, depth int)
+	for _, s := range byParent[""] {
+		roots = append(roots, subagentEntry{sub: s})
+	}
+	sort.SliceStable(roots, func(i, j int) bool { return roots[i].created().After(roots[j].created()) })
+
+	var out []subagentEntry
 	seen := map[string]bool{}
+	var walk func(parent string, depth int)
 	walk = func(parent string, depth int) {
 		for _, s := range byParent[parent] {
 			if seen[s.ID] {
@@ -237,12 +254,18 @@ func (m *Model) subagentsOf(parentID string) []subagentEntry {
 			walk(s.ID, depth+1)
 		}
 	}
-	walk("", 0)
-	// orphans whose parent subagent we never saw
-	for p, list := range byParent {
-		if p == "" {
+	for _, e := range roots {
+		if e.agent != nil {
+			out = append(out, e)
 			continue
 		}
+		if !seen[e.sub.ID] {
+			seen[e.sub.ID] = true
+			out = append(out, e)
+			walk(e.sub.ID, 1)
+		}
+	}
+	for _, list := range byParent { // a parent loop never reached from the top level
 		for _, s := range list {
 			if !seen[s.ID] {
 				seen[s.ID] = true

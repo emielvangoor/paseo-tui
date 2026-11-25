@@ -6,6 +6,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `/` lists the agent's slash commands and skills above the message box, like the desktop's composer.
+  A `/` at the start of a message lists both, a `/` later in it lists only skills. Type to filter,
+  `↑` / `↓` to choose, `tab` or `enter` to insert, `esc` to close. Pressing `/` outside the message box
+  starts one.
+- Questions from agents (Claude's `AskUserQuestion` and other question requests) can be answered.
+  The pending question shows above the message box; `enter` or `y` opens a form like the desktop's
+  question card (pick an option, toggle several for multiple choice, or type your own answer), and `x`
+  dismisses it. Before, `y` approved the question without an answer.
+- `H` opens History, like the desktop's: every agent on the host, archived ones included, most recently
+  active first, with search (title, workspace, branch, project). `enter` opens an agent; an archived one
+  is restored first, together with its workspace (an archived worktree is recreated). Also in the
+  command center.
+
+### Changed
+
+- `/` no longer opens the command center (it starts a slash command); `p` and `ctrl+p` still do. With
+  no agent open, `/` still opens the command center.
+- The subagents list (`u`) shows the newest subagent on top. Nested subagents stay under the one that
+  started them, newest first too.
+- Workspaces are numbered under their sidebar heading (project, status group or Pinned), in the sidebar
+  and the header (`paseo-tui › 1. main`), so moving with `J` / `K` or `{` / `}` shows which way you're going.
+
 ## [0.5.0] - 2026-11-24
 
 ### Added
