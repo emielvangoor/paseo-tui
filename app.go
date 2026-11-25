@@ -115,9 +115,7 @@ type Model struct {
 	statusT time.Time
 	isErr   bool
 
-	confirmText string
-	confirmFn   func() tea.Cmd
-	askingQuit  bool // the confirmation is the quit question (q or ctrl+c again confirms)
+	conf *confirmation // the open ovConfirm question
 
 	form      *NewAgentForm
 	providers []Provider
@@ -150,6 +148,7 @@ type Model struct {
 	sideScroll int // extra sidebar scroll from the mouse wheel
 	lastWheel  time.Time
 	wheelSpeed int
+	helpScroll int // first body line of the help (?) when it's taller than the window
 	composerH  int // current height of the message box
 
 	settings       *Settings
@@ -1168,6 +1167,11 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.paneMouse(msg)
 			return m, nil
 		}
+		if m.overlay == ovHelp && tea.MouseEvent(msg).IsWheel() {
+			m.helpScroll += map[bool]int{true: -3, false: 3}[msg.Button == tea.MouseButtonWheelUp]
+			m.helpScroll = min(max(0, m.helpScroll), m.helpMaxScroll())
+			return m, nil
+		}
 		// a click dismisses floating panels (help, command center, subagent list)
 		if (m.overlay == ovHelp || m.overlay == ovPalette || m.overlay == ovSubs || m.overlay == ovSettings || m.overlay == ovMenu) &&
 			msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
@@ -1229,32 +1233,36 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if k.String() == "ctrl+c" {
-		if m.overlay == ovConfirm && m.askingQuit { // a second ctrl+c confirms
+		if m.overlay == ovConfirm && m.conf.quit { // a second ctrl+c confirms
 			m.shutdown()
 			return m, tea.Quit
 		}
-		return m.quit()
+		return m.quit("ctrl+c")
 	}
 
 	switch m.overlay {
 	case ovHelp:
-		m.overlay = ovNone
+		m.helpKey(k)
 		return m, nil
 	case ovConfirm:
+		c := m.conf
 		key := k.String()
-		if m.askingQuit && key == "q" { // q, q quits
+		if key == c.again { // the key that asked confirms (q q, s s)
 			key = "y"
 		}
 		switch key {
 		case "y", "Y", "enter":
-			m.overlay, m.askingQuit = ovNone, false
-			fn := m.confirmFn
-			m.confirmFn = nil
-			if fn != nil {
-				return m, fn()
+			m.overlay, m.conf = ovNone, nil
+			if c.yes != nil {
+				return m, c.yes()
 			}
-		case "n", "N", "esc", "q":
-			m.overlay, m.askingQuit = ovNone, false
+		case "n", "N":
+			m.overlay, m.conf = ovNone, nil
+			if c.no != nil {
+				return m, c.no()
+			}
+		case "esc", "q":
+			m.overlay, m.conf = ovNone, nil
 		}
 		return m, nil
 	case ovSettings:
@@ -1448,11 +1456,15 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	a := m.current()
 	switch k.String() {
 	case "q":
-		return m.quit()
+		return m.quit("q")
 	case "?":
-		m.overlay = ovHelp
-	case "p", "ctrl+p":
+		m.overlay, m.helpScroll = ovHelp, 0
+	case "p", "ctrl+p", ":":
 		return m.openPalette()
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		if tabs := m.tabs(); int(k.Runes[0]-'1') < len(tabs) {
+			return m, m.selectItem(tabs[k.Runes[0]-'1'])
+		}
 	case "/":
 		// write a slash command to the agent; without one, the command center
 		if a == nil || m.selSub != nil {
@@ -1468,12 +1480,12 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.focus = focusInput
 		cmd := tea.Batch(m.input.Focus(), m.refreshSlash())
 		return m, cmd
-	case "J", "down":
+	case "j", "down":
 		if m.state.HideSidebar {
 			return m, m.stepWorkspace(1)
 		}
 		return m, m.step(1)
-	case "K", "up":
+	case "k", "up":
 		if m.state.HideSidebar {
 			return m, m.stepWorkspace(-1)
 		}
@@ -1576,20 +1588,20 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setCollapsed(r.key, !m.state.Collapsed[r.key])
 			return m, nil
 		}
+		if a != nil && k.String() == "enter" && len(m.perms[a.ID]) > 0 { // enter answers what the agent waits on; i always writes
+			return m.openPending(a)
+		}
 		if m.selSub != nil {
 			m.setStatus("Subagent transcripts are read-only — message the parent agent's tab", true)
 			return m, nil
 		}
 		if a != nil {
-			if p, qs, ok := m.pendingQuestion(a.ID); ok {
-				return m.openQuestion(a.ID, p, qs)
-			}
 			m.focus = focusInput
 			return m, m.input.Focus()
 		}
-	case "pgup", "pgdown", "ctrl+u", "ctrl+d", "g", "G", "j", "k":
+	case "pgup", "pgdown", "ctrl+u", "ctrl+d", "g", "G", "J", "K":
 		return m.scroll(k.String())
-	case "n", "c":
+	case "n":
 		return m.openNewForm()
 	case "N":
 		return m.openNewFormMode(false, "")
@@ -1597,7 +1609,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openSettings()
 	case "f":
 		return m.openFork()
-	case "R":
+	case "r":
 		return m.openRename()
 	case "H":
 		return m.openHistory()
@@ -1619,31 +1631,28 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "w", "ctrl+w":
 		return m, m.closeSubTab()
 	case "s":
-		if a != nil {
-			m.setStatus("Interrupting…", false)
-			return m, m.call("Interrupted", "cancel", map[string]any{"agentId": a.ID})
+		if a != nil && m.selSub == nil {
+			if a.Status != "running" {
+				m.setStatus(agentLabel(*a)+" isn't running", true)
+				return m, nil
+			}
+			id := a.ID
+			return m.ask(confirmation{text: fmt.Sprintf("Stop %q?", agentLabel(*a)), again: "s", hint: "y stop · n cancel", yes: func() tea.Cmd {
+				return m.call("Stopped", "cancel", map[string]any{"agentId": id})
+			}})
 		}
 	case "a":
 		return m.openArchiveMenu()
-	case "D", "delete":
-		if a != nil {
-			id, name := a.ID, agentLabel(*a)
-			return m.confirm(fmt.Sprintf("Permanently delete %q?", name), func() tea.Cmd {
-				return m.call("Deleted "+name, "delete", map[string]any{"agentId": id})
-			})
+	case "delete":
+		if a != nil && m.selSub == nil {
+			return m.ask(deleteAgent(m, *a))
 		}
-	case "y", "x":
+	case "x":
 		if a != nil && len(m.perms[a.ID]) > 0 {
 			if p, qs, ok := m.pendingQuestion(a.ID); ok {
-				if k.String() == "y" {
-					return m.openQuestion(a.ID, p, qs)
-				}
 				return m, m.dismissQuestion(a.ID, p, qs)
 			}
-			p := m.perms[a.ID][0]
-			allow := k.String() == "y"
-			verb := map[bool]string{true: "Allowed", false: "Denied"}[allow]
-			return m, m.call(verb+" "+p.Name, "permit", map[string]any{"agentId": a.ID, "requestId": p.ID, "allow": allow})
+			return m, m.permit(a.ID, m.perms[a.ID][0], false)
 		}
 	case "A":
 		m.showAll = !m.showAll
@@ -1655,7 +1664,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		m.render.Verbose = !m.render.Verbose
 		m.refreshViewport()
-	case "r", "ctrl+r":
+	case "ctrl+r":
 		if m.br != nil && !m.connected {
 			return m, m.call("Reconnected", "reconnect", nil)
 		}
@@ -1704,9 +1713,9 @@ func (m Model) scroll(key string) (tea.Model, tea.Cmd) {
 		m.vp.HalfViewUp()
 	case "ctrl+d":
 		m.vp.HalfViewDown()
-	case "k":
+	case "K":
 		m.vp.LineUp(lineStep)
-	case "j":
+	case "J":
 		m.vp.LineDown(lineStep)
 	case "g":
 		m.vp.GotoTop()
@@ -1717,9 +1726,53 @@ func (m Model) scroll(key string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// confirmation is a yes/no question in a dialog (ovConfirm).
+type confirmation struct {
+	text  string
+	yes   func() tea.Cmd
+	no    func() tea.Cmd // n answers no (deny); without it n just cancels, like esc
+	again string         // pressing the key that asked again confirms: q q, s s
+	hint  string         // the keys, default "y confirm · n cancel"
+	quit  bool           // the quit question: ctrl+c confirms too
+}
+
 func (m Model) confirm(text string, fn func() tea.Cmd) (tea.Model, tea.Cmd) {
-	m.overlay, m.confirmText, m.confirmFn = ovConfirm, text, fn
+	return m.ask(confirmation{text: text, yes: fn})
+}
+
+func (m Model) ask(c confirmation) (tea.Model, tea.Cmd) {
+	m.overlay, m.conf = ovConfirm, &c
 	return m, nil
+}
+
+// openPending opens what the agent waits on: its question, else a dialog for its first permission.
+func (m Model) openPending(a *Agent) (tea.Model, tea.Cmd) {
+	if p, qs, ok := m.pendingQuestion(a.ID); ok {
+		return m.openQuestion(a.ID, p, qs)
+	}
+	perms := m.perms[a.ID]
+	p := perms[0]
+	text := sBold.Render("Allow "+p.Name+"?") + "\n\n" + permissionDetail(p)
+	if len(perms) > 1 {
+		text += "\n\n" + sMuted.Render(fmt.Sprintf("%d more after this one", len(perms)-1))
+	}
+	id := a.ID
+	return m.ask(confirmation{text: text, hint: "y allow · n deny · esc later",
+		yes: func() tea.Cmd { return m.permit(id, p, true) },
+		no:  func() tea.Cmd { return m.permit(id, p, false) }})
+}
+
+func (m *Model) permit(agentID string, p PermissionReq, allow bool) tea.Cmd {
+	verb := map[bool]string{true: "Allowed", false: "Denied"}[allow]
+	return m.call(verb+" "+p.Name, "permit", map[string]any{"agentId": agentID, "requestId": p.ID, "allow": allow})
+}
+
+func deleteAgent(m Model, a Agent) confirmation {
+	id, name := a.ID, agentLabel(a)
+	return confirmation{
+		text: fmt.Sprintf("Permanently delete %q?\n\nIts chat history is gone for good; archiving keeps it restorable.", name),
+		yes:  func() tea.Cmd { return m.call("Deleted "+name, "delete", map[string]any{"agentId": id}) },
+	}
 }
 
 func (m Model) openPalette() (tea.Model, tea.Cmd) {
@@ -1930,7 +1983,7 @@ func (m *Model) submitNewForm() tea.Cmd {
 }
 
 // quit asks before exiting; the question warns when hidden panes would close with it.
-func (m Model) quit() (tea.Model, tea.Cmd) {
+func (m Model) quit(key string) (tea.Model, tea.Cmd) {
 	q := "Quit paseo-tui?"
 	if ps := m.runningPanes(); len(ps) > 0 {
 		var names []string
@@ -1940,11 +1993,10 @@ func (m Model) quit() (tea.Model, tea.Cmd) {
 		q = fmt.Sprintf("Quit paseo-tui? %s still running in the background and will close too.\n\nUnsaved changes there are lost.",
 			strings.Join(names, ", ")+map[bool]string{true: " is", false: " are"}[len(names) == 1])
 	}
-	m.askingQuit = true
-	return m.confirm(q, func() tea.Cmd {
+	return m.ask(confirmation{text: q, again: key, quit: true, yes: func() tea.Cmd {
 		m.shutdown()
 		return tea.Quit
-	})
+	}})
 }
 
 func (m *Model) shutdown() {
@@ -2066,6 +2118,24 @@ func permissionSummary(p PermissionReq) string {
 	return orDefault(p.Description, p.Title)
 }
 
+// permissionDetail is the whole request for the review dialog: the full
+// command (up to 12 lines), else the summary, with the description under it.
+func permissionDetail(p PermissionReq) string {
+	s := permissionSummary(p)
+	var d ToolDetail
+	if len(p.Detail) > 0 && json.Unmarshal(p.Detail, &d) == nil && d.Command != "" {
+		lines := strings.Split(strings.TrimSpace(d.Command), "\n")
+		if len(lines) > 12 {
+			lines = append(lines[:12], sMuted.Render(fmt.Sprintf("… %d more lines", len(lines)-12)))
+		}
+		s = strings.Join(lines, "\n")
+	}
+	if p.Description != "" && p.Description != s {
+		s += "\n\n" + sMuted.Render(p.Description)
+	}
+	return s
+}
+
 func toolSummary(t *ToolEntry) string {
 	d := t.Detail
 	switch d.Type {
@@ -2107,11 +2177,11 @@ func (m Model) View() string {
 
 	switch m.overlay {
 	case ovHelp:
-		return m.centerOver(screen, helpBox())
+		return m.centerOver(screen, m.helpBox())
 	case ovConfirm:
-		text := lipgloss.NewStyle().Width(min(64, m.width-16)).Render(m.confirmText)
+		text := lipgloss.NewStyle().Width(min(64, m.width-16)).Render(m.conf.text)
 		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).Padding(1, 3).
-			Render(text + "\n\n" + sMuted.Render("y confirm · n cancel"))
+			Render(text + "\n\n" + sMuted.Render(orDefault(m.conf.hint, "y confirm · n cancel")))
 		return m.centerOver(screen, box)
 	case ovNew:
 		return m.centerOver(screen, m.form.View(m))
@@ -2171,12 +2241,12 @@ func (m Model) viewFooter() string {
 	if a := m.current(); a != nil && m.selSub == nil {
 		switch {
 		case len(m.perms[a.ID]) > 0:
-			right = sGreen.Render("y allow") + sMuted.Render(" · ") + sRed.Render("x deny")
+			right = sGreen.Render("enter review") + sMuted.Render(" · ") + sRed.Render("x deny")
 			if _, _, ok := m.pendingQuestion(a.ID); ok {
 				right = sGreen.Render("enter answer") + sMuted.Render(" · ") + sRed.Render("x dismiss")
 			}
 		case a.Status == "running":
-			right = sMuted.Render("s interrupt")
+			right = sMuted.Render("s stop")
 		case len(m.subagentsOf(a.ID)) > 0:
 			right = sMuted.Render("u subagents")
 		}
@@ -2224,7 +2294,7 @@ func (m Model) viewMain(h int) string {
 			if m.downCode == "DAEMON_NOT_RUNNING" && m.local {
 				msg += "\n\n" + sBold.Render("Press S to start it.")
 			} else {
-				msg += "\n\n" + sMuted.Render("Press r to retry.")
+				msg += "\n\n" + sMuted.Render("Press ctrl+r to retry.")
 			}
 		}
 		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, msg)
@@ -2303,7 +2373,7 @@ func (m Model) viewMain(h int) string {
 		}
 		desc := permissionSummary(p)
 		head := sRed.Bold(true).Render("⚠ Permission: ") + sBold.Render(p.Name) + more
-		keys := sGreen.Render("y allow") + sMuted.Render(" · ") + sRed.Render("x deny")
+		keys := sGreen.Render("enter review") + sMuted.Render(" · ") + sRed.Render("x deny")
 		if qp, qs, ok := m.pendingQuestion(a.ID); ok {
 			p, desc = qp, qs[0].Question
 			if desc == p.Title {
@@ -2704,63 +2774,4 @@ func shortHome(p string) string {
 		return "~" + p[len(h):]
 	}
 	return p
-}
-
-func helpBox() string {
-	rows := [][2]string{
-		{"p, ctrl+p", "command center: workspaces, agents, actions"},
-		{"J / K, ↑ / ↓", "move through projects and workspaces"},
-		{"{ / }", "previous / next workspace in the tree (works with the sidebar hidden)"},
-		{"h / l, ← / →", "collapse / expand project"},
-		{"space", "toggle project"},
-		{"z", "collapse all other projects"},
-		{"o", "group sidebar by project / by status"},
-		{"b, ctrl+b", "hide / show the sidebar"},
-		{"< / >", "move the sidebar divider (narrower / wider) — or drag it"},
-		{", / .", "move the details-panel divider (wider / narrower) — or drag it"},
-		{"d", "agent details panel (status, model, context, cost, tasks, subagents)"},
-		{"m", "agent settings: model, thinking, mode, Fast"},
-		{"alt+↑ / alt+↓", "scroll the details panel (or use the mouse wheel over it)"},
-		{"[ / ], tab / shift+tab", "previous / next agent tab"},
-		{"alt+1 … alt+9", "jump to agent tab"},
-		{"u", "subagents of this agent (open one as a ↳ tab)"},
-		{"w, ctrl+w, middle-click", "close a subagent tab (or click its ×)"},
-		{"click a tab", "switch to it"},
-		{"enter, i", "write a message to the agent"},
-		{"/", "commands and skills of the agent (also typed in the message box)"},
-		{"ctrl+v", "paste an image (or paste/drop an image path)"},
-		{"n, ctrl+n", "new agent (in this workspace, or a new one)"},
-		{"N", "new workspace: project, project directory or new worktree, start branch, model"},
-		{"↑ / ↓ in the input", "previous / next prompt from history"},
-		{"mouse drag", "select transcript text (copied on release)"},
-		{"s", "interrupt running agent"},
-		{"y / x", "allow / deny pending permission"},
-		{"enter (question)", "answer the agent's question; x dismisses it"},
-		{"a", "archive agent / workspace, or remove project"},
-		{"D", "delete agent"},
-		{"f", "fork the agent: a new tab (or workspace) that starts from its chat history"},
-		{"R", "rename the agent (its tab)"},
-		{"H", "history: every agent, archived ones too; enter opens or restores one"},
-		{"e", "edit the workspace in $VISUAL / $EDITOR, in a floating pane (ctrl+\\ hides it)"},
-		{"F", "browse files in ranger / yazi / lf / nnn in a floating pane (else Finder)"},
-		{"A", "toggle archived agents"},
-		{"j / k", "scroll transcript"},
-		{"pgup/pgdn, ctrl+u/d", "scroll transcript by page / half page"},
-		{"g / G", "transcript top / bottom (follow)"},
-		{"t", "show / hide thinking"},
-		{"v", "verbose tool output (commands, diffs)"},
-		{"r", "reload transcript / reconnect"},
-		{"S", "start local daemon (when stopped)"},
-		{"q, ctrl+c", "quit (asks first; y or the same key again confirms)"},
-	}
-	var b strings.Builder
-	b.WriteString(sAccent.Render("paseo-tui") + sMuted.Render("  keys") + "\n\n")
-	for _, r := range rows {
-		b.WriteString(sBold.Render(fmt.Sprintf("%-22s", r[0])) + sMuted.Render(r[1]) + "\n")
-	}
-	b.WriteString("\n" + sMuted.Render("legend: ") + sRed.Bold(true).Render("!") + sMuted.Render(" needs input  ") + sRed.Render("✗") +
-		sMuted.Render(" failed  ") + sYellow.Render("⠋") + sMuted.Render(" working  ") + sBlue.Render("◆") + sMuted.Render(" ready to review  ") +
-		sMuted.Render("· ⎇ done"))
-	b.WriteString("\n\n" + sMuted.Render("any key to close"))
-	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cAccent).Padding(1, 3).Render(b.String())
 }

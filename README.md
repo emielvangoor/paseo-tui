@@ -32,9 +32,9 @@ It works with your local Paseo daemon or any remote one, over SSH or the network
 - **Start work fast.** `N` opens **New workspace**: pick the project, the project directory or a fresh
   **git worktree**, the branch to start from, the provider, model and thinking level, then type the task.
   The daemon names the workspace and branch after your prompt.
-- **Steer agents.** Send follow-ups, paste images, interrupt, allow or deny tool permissions, and switch
+- **Steer agents.** Send follow-ups, paste images, stop a run, review tool permissions, and switch
   model, thinking or mode mid-session (`m`). **Fork** an agent (`f`) into a new tab or workspace that
-  starts from its chat history, as the desktop does, and **rename** agents (`R`).
+  starts from its chat history, as the desktop does, and **rename** agents (`r`).
 - **Peek at the code.** `e` opens the workspace in your editor (`$VISUAL` / `$EDITOR`, else nvim or vim) in a
   pane floating over the UI, while agents keep streaming behind it. `ctrl+\` hides it, `e` brings it back,
   quitting the editor closes it.
@@ -165,16 +165,20 @@ Press `?` inside the app for every shortcut.
 
 ## Keyboard shortcuts
 
+Single keys, as in lazygit, k9s or tig: `j` / `k` (and the arrows) move through the sidebar, `J` / `K`
+scroll the transcript, and anything that stops or removes something asks first. Keys only act outside the
+message box: `esc` leaves it, `i` or `enter` goes back in.
+
 <details open>
 <summary><b>Navigate</b></summary>
 
 | Key | Action |
 |---|---|
-| `p` · `ctrl+p` | Command center: workspaces, agents, actions |
-| `J` / `K` · `↑` / `↓` | Move through the sidebar |
+| `p` · `ctrl+p` · `:` | Command center: workspaces, agents, actions |
+| `j` / `k` · `↓` / `↑` | Move through the sidebar (`home` / `end`: first / last row) |
 | `{` / `}` | Previous / next workspace in tree order (works with the sidebar hidden) |
-| `[` / `]` · `tab` · `alt+1…9` | Previous / next agent tab, or jump to tab N |
-| `h` / `l` · `space` · `z` | Collapse / expand a project · toggle · collapse all the others |
+| `[` / `]` · `tab` · `1`…`9` | Previous / next agent tab, or jump to tab N (`alt+1…9` while writing) |
+| `h` / `l` · `←` / `→` · `space` · `z` | Collapse / expand a project · toggle · collapse all the others |
 | `o` | Group the sidebar by project or by status |
 | `b` · `d` | Hide or show the sidebar · the details panel |
 | `<` `>` · `,` `.` | Resize the sidebar · the details panel (or drag the dividers) |
@@ -186,24 +190,24 @@ Press `?` inside the app for every shortcut.
 
 | Key | Action |
 |---|---|
-| `enter` · `i` | Write to the focused agent (`enter` sends, `alt+enter` adds a newline, `esc` leaves) |
+| `i` · `enter` | Write to the focused agent (`enter` sends, `alt+enter` adds a newline, `esc` leaves). When the agent waits on you, `enter` opens that instead |
 | `/` | The agent's commands and skills, as in the desktop: `/` at the start of a message lists both, `/` later in a message lists skills. Type to filter, `↑` / `↓` choose, `tab` or `enter` inserts, `esc` closes |
 | `↑` / `↓` (in the composer) | Previous / next prompt from history |
 | `ctrl+v` | Paste an image from the clipboard (pasting or dropping an image path works too) |
 | `n` · `ctrl+n` | New agent in this workspace (a new tab) |
+| `N` | New workspace (project directory or worktree, branch, provider, model, thinking) |
 | `f` | Fork the agent: a new tab (or, via *Where*, a new workspace) with the same provider, model and mode that starts from its chat history |
-| `R` | Rename the agent (its tab) |
+| `r` | Rename the agent (its tab) |
+| `m` | Agent settings: model, thinking level, mode, toggles such as Fast |
+| `s` | Stop the running agent (asks; `s` again or `y` confirms) |
+| `enter` · `x` | A pending tool permission: review it (the full command; `y` allows, `n` denies, `esc` decides later) · deny it straight away |
+| `enter` · `x` | A pending question (e.g. Claude's AskUserQuestion): answer it, picking an option or typing your own · dismiss it |
+| `u` | Subagents of this agent; open one as a `↳` tab (`w` or `ctrl+w` closes it) |
+| `a` | Archive the agent or the workspace, delete the agent, or remove a project (always confirms) |
+| `delete` | Delete the agent permanently (asks; `fn+delete` on a Mac keyboard) |
 | `H` | History, like the desktop's: every agent including archived ones, searchable; `enter` opens one, and restores it first (with its workspace or worktree) when archived |
 | `e` | Open the workspace in your editor in a floating pane: `$VISUAL`, `$EDITOR`, else nvim or vim (`ctrl+\` hides it, `e` brings it back, quitting the editor closes it). GUI editors need their terminal mode, e.g. `VISUAL="emacs -nw"` |
 | `F` | Browse the workspace's files in a floating pane with ranger, yazi, lf or nnn (the first one installed; `ctrl+\` hides it, `F` brings it back). Without one, opens the directory in Finder, Explorer or the Linux file manager |
-| `N` | New workspace (project directory or worktree, branch, provider, model, thinking) |
-| `m` | Agent settings: model, thinking level, mode, toggles such as Fast |
-| `s` | Interrupt the running agent |
-| `y` / `x` | Allow / deny a pending tool permission |
-| `enter` · `y` (question) | Answer the agent's question (e.g. Claude's AskUserQuestion): pick an option or type your own answer; `x` dismisses it |
-| `u` | Subagents of this agent; open one as a `↳` tab (`ctrl+w` closes it) |
-| `a` | Archive the agent or the workspace, or remove a project (always confirms) |
-| `D` | Delete the agent permanently |
 
 </details>
 
@@ -212,13 +216,15 @@ Press `?` inside the app for every shortcut.
 
 | Key | Action |
 |---|---|
+| `J` / `K` · mouse wheel | Scroll the transcript (the wheel accelerates) |
+| `ctrl+d` / `ctrl+u` · `pgdn` / `pgup` | Scroll half a page · a page |
+| `g` / `G` | Top / bottom of the transcript (`G` follows new output) |
 | `t` | Show / hide thinking |
 | `v` | Verbose tool output: command output and diffs |
-| mouse wheel · `pgup` / `pgdn` · `ctrl+u` / `ctrl+d` · `j` / `k` | Scroll the transcript (the wheel accelerates) |
-| `g` / `G` | Top / bottom of the transcript (`G` follows new output) |
-| `alt+↑` / `alt+↓` | Scroll the details panel |
+| `alt+j` / `alt+k` · `alt+↓` / `alt+↑` | Scroll the details panel |
 | `A` | Show archived agents |
-| `r` · `S` | Reload / reconnect · start the local daemon |
+| `ctrl+r` · `S` | Reload / reconnect · start the local daemon |
+| `?` | All shortcuts |
 | `q` · `ctrl+c` | Quit (asks first; `y`, or the same key again, confirms) |
 
 </details>

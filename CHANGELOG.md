@@ -14,7 +14,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Changed
 
 - Scrolling is calmer. A wheel notch moves 2 lines, and a fast spin (or trackpad swipe) speeds up to at
-  most 8 lines per step instead of 20; `j` / `k` move 3 lines instead of 6.
+  most 8 lines per step instead of 20; the scroll keys move 3 lines instead of 6.
+- The keyboard help (`?`) is grouped into sections (Navigate, Tabs, Write, Agents, Files, Transcript,
+  Layout, App), laid out in two columns when the window is wide enough, and scrolls when it still
+  doesn't fit (`j` / `k`, `↑` / `↓`, `space` / `pgdn`, the mouse wheel). Other keys close it.
+- Shortcuts follow the usual terminal-app conventions (lazygit, k9s, tig):
+  - `j` / `k` move through the sidebar, like `↓` / `↑`; `J` / `K` scroll the transcript.
+  - `r` renames the agent (was `R`); `ctrl+r` reloads / reconnects (was `r`).
+  - `s` stops the running agent only after asking (`s s` or `s y`).
+  - A pending permission is reviewed in a dialog: `enter` opens it with the full command, `y` allows,
+    `n` denies, `esc` decides later. `x` still denies straight away; `y` alone no longer allows.
+  - Deleting an agent is in the `a` menu, or the `delete` key; `D` is gone, so a slip of shift on `d`
+    (details panel) can't start a delete.
+  - `1`…`9` jump to tab N, as `alt+1…9` do (Option often doesn't send `alt` in macOS terminals).
+  - `:` opens the command center too; `c` no longer opens a new agent (`n` does).
 
 ### Fixed
 

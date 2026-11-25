@@ -24,7 +24,7 @@ type ActionMenu struct {
 }
 
 func (m *Model) openArchiveMenu() (tea.Model, tea.Cmd) {
-	menu := &ActionMenu{title: "Archive or remove"}
+	menu := &ActionMenu{title: "Archive, delete or remove"}
 
 	// sidebar cursor on a project header: that project
 	var proj *projView
@@ -84,6 +84,13 @@ func (m *Model) openArchiveMenu() (tea.Model, tea.Cmd) {
 			},
 		})
 	}
+	if a := m.current(); a != nil && m.selSub == nil && !onProjectRow {
+		c := deleteAgent(*m, *a)
+		menu.items = append(menu.items, menuItem{
+			label: "Delete agent", target: fmt.Sprintf("%q", truncate(agentLabel(*a), 34)), hint: "permanent: no restore",
+			confirm: c.text, run: c.yes,
+		})
+	}
 	if proj != nil && !strings.HasPrefix(proj.id, "cwd:") {
 		pid, pname := proj.id, proj.name
 		n := len(proj.workspaces)
@@ -117,7 +124,7 @@ func (m *Model) menuKey(k tea.KeyMsg) tea.Cmd {
 	case "enter":
 		it := mn.items[mn.sel]
 		m.overlay, m.menu = ovConfirm, nil
-		m.confirmText, m.confirmFn = it.confirm, it.run
+		m.conf = &confirmation{text: it.confirm, yes: it.run}
 	}
 	return nil
 }

@@ -122,7 +122,7 @@ func NewPalette(m *Model) *Palette {
 		{"n", "New agent in this workspace", "n"},
 		{"N", "New workspace…", "N"},
 		{"f", "Fork agent into a new tab", "f"},
-		{"R", "Rename agent", "R"},
+		{"r", "Rename agent", "r"},
 		{"H", "History: open or restore archived agents", "H"},
 		{"e", "Open the workspace in your editor", "e"},
 		{"F", files, "F"},
@@ -130,12 +130,12 @@ func NewPalette(m *Model) *Palette {
 		{"o", group, "o"},
 		{"m", "Agent settings: model, thinking, mode", "m"},
 		{"d", "Toggle agent details panel", "d"},
-		{"a", "Archive agent / workspace, or remove project", "a"},
+		{"a", "Archive or delete agent / workspace, remove project", "a"},
 		{"z", "Collapse other projects", "z"},
 		{"A", archived, "A"},
 		{"t", "Toggle thinking", "t"},
 		{"v", "Toggle verbose tool output", "v"},
-		{"r", "Reload transcript / reconnect", "r"},
+		{"ctrl+r", "Reload transcript / reconnect", "ctrl+r"},
 		{"?", "Keyboard shortcuts", "?"},
 	}
 	if m.down && m.local {

@@ -119,7 +119,7 @@ func (m Model) viewDetailsLines() []string {
 		for _, p := range perms {
 			b = append(b, sRed.Bold(true).Render("! ")+truncate(p.Name+" "+sMuted.Render(permissionSummary(p)), inner-2))
 		}
-		b = append(b, sGreen.Render("y allow")+sMuted.Render(" · ")+sRed.Render("x deny"))
+		b = append(b, sGreen.Render("enter review")+sMuted.Render(" · ")+sRed.Render("x deny"))
 	}
 
 	// tasks (latest todo list in the transcript)
