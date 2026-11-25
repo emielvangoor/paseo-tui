@@ -1669,13 +1669,21 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// wheel scrolls the transcript with acceleration: a single notch moves a few
-// lines, a fast spin ramps up so long transcripts fly by.
+// Scroll steps in lines. A trackpad sends a wheel event every few
+// milliseconds, so the ramp is gentle: a single notch moves wheelBase lines, a
+// long fast spin works up to wheelMax per event.
+const (
+	wheelBase = 2
+	wheelMax  = 8
+	lineStep  = 3 // j / k
+)
+
+// wheel scrolls the transcript, speeding up while the wheel keeps spinning.
 func (m *Model) wheel(up bool) {
 	if time.Since(m.lastWheel) < 60*time.Millisecond {
-		m.wheelSpeed = min(m.wheelSpeed+2, 20)
+		m.wheelSpeed = min(m.wheelSpeed+1, wheelMax)
 	} else {
-		m.wheelSpeed = 5
+		m.wheelSpeed = wheelBase
 	}
 	m.lastWheel = time.Now()
 	if up {
@@ -1697,9 +1705,9 @@ func (m Model) scroll(key string) (tea.Model, tea.Cmd) {
 	case "ctrl+d":
 		m.vp.HalfViewDown()
 	case "k":
-		m.vp.LineUp(6)
+		m.vp.LineUp(lineStep)
 	case "j":
-		m.vp.LineDown(6)
+		m.vp.LineDown(lineStep)
 	case "g":
 		m.vp.GotoTop()
 	case "G":

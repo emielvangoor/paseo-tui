@@ -11,6 +11,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - The focused agent's model and thinking level show at the right end of the tab bar
   (e.g. `Claude Opus 5.5 · high`). They take no extra space and are left out when the tabs need the room.
 
+### Changed
+
+- Scrolling is calmer. A wheel notch moves 2 lines, and a fast spin (or trackpad swipe) speeds up to at
+  most 8 lines per step instead of 20; `j` / `k` move 3 lines instead of 6.
+
 ### Fixed
 
 - Markdown tables wider than the transcript are laid out to fit its full width: long cells wrap inside their column.
