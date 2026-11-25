@@ -233,3 +233,31 @@ func TestSubagentsNewestFirst(t *testing.T) {
 		t.Fatalf("order %q, want %q", strings.Join(got, " "), want)
 	}
 }
+
+// A table wider than the transcript is laid out to fit, cells wrapped inside
+// their columns, instead of each row being broken across lines.
+func TestWideTableFits(t *testing.T) {
+	r := NewRenderer(true)
+	r.SetWidth(60)
+	text := "Keys:\n\n| Key | Action | Notes |\n|---|---|---|\n" +
+		"| `f` | Fork the agent into a new tab or a new workspace with the same provider, model and mode | starts from its chat history |\n" +
+		"| `R` | Rename | short |\n"
+	out := ansi.Strip(r.renderEntry(&Entry{Kind: "assistant", Text: text}))
+	rows, widest := 0, 0
+	for _, line := range strings.Split(out, "\n") {
+		w := ansi.StringWidth(strings.TrimRight(line, " "))
+		if w > 59 {
+			t.Errorf("line %d wide: %q", w, line)
+		}
+		widest = max(widest, w)
+		if strings.Count(line, "│") == 2 { // every table line keeps both column separators
+			rows++
+		}
+	}
+	if rows < 4 {
+		t.Errorf("table rows lost their columns:\n%s", out)
+	}
+	if widest < 58 { // a table that has to wrap uses the whole line
+		t.Errorf("table only %d of 59 columns wide:\n%s", widest, out)
+	}
+}

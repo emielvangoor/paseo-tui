@@ -236,6 +236,7 @@ var (
 type Renderer struct {
 	width    int
 	md       *glamour.TermRenderer
+	mdFit    *glamour.TermRenderer // wraps to the width: tables get their cells wrapped to fit
 	cache    map[*Entry]cached
 	ShowThk  bool
 	Verbose  bool
@@ -267,6 +268,11 @@ func (r *Renderer) SetWidth(w int) {
 	md, err := glamour.NewTermRenderer(glamour.WithStyles(style), glamour.WithWordWrap(0), glamour.WithEmoji())
 	if err == nil {
 		r.md = md
+	}
+	// glamour's wrap width counts the indent it draws on the left and a margin it keeps on the
+	// right; adding them back lets a table use the whole line, up to the 1 column rewrap keeps free
+	if fit, err := glamour.NewTermRenderer(glamour.WithStyles(style), glamour.WithWordWrap(max(20, w+3)), glamour.WithEmoji()); err == nil {
+		r.mdFit = fit
 	}
 	r.cache = map[*Entry]cached{}
 }
@@ -323,7 +329,11 @@ func (r *Renderer) renderEntry(e *Entry) string {
 			return ""
 		}
 		if r.md != nil {
-			if out, err := r.md.Render(txt); err == nil {
+			md := r.md
+			if r.mdFit != nil && mdTable.MatchString(txt) {
+				md = r.mdFit // unwrapped, a wide table's rows would be broken mid-row
+			}
+			if out, err := md.Render(txt); err == nil {
 				return rewrap(trimPadding(strings.Trim(out, "\n")), r.width-1)
 			}
 		}
@@ -469,6 +479,9 @@ func trimPadding(s string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+// mdTable matches a markdown table's header separator row, e.g. "|---|:--:|".
+var mdTable = regexp.MustCompile(`(?m)^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$`)
 
 // rewrap word-wraps rendered (ANSI) markdown, giving continuation lines the
 // same indentation as the line they came from.
