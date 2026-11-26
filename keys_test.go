@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ctrl+n / ctrl+p move the selection like down / up; they don't close the palette.
@@ -116,5 +117,86 @@ func TestQuestionAnswers(t *testing.T) {
 	}
 	if parseQuestions(json.RawMessage(`{"questions":[{"question":"x"}]}`)) != nil {
 		t.Error("a question without header and options should not parse")
+	}
+}
+
+// /clear and /exit (and their aliases) are recognised only as a whole message,
+// listed after the agent's own commands, and win over an agent command of the same name.
+func TestClientCommands(t *testing.T) {
+	for text, want := range map[string]string{"/clear": "clear", " /new ": "clear", "/q": "exit", "/quit": "exit",
+		"/clear now": "", "please /clear": "", "/clearly": "", "clear": ""} {
+		got := ""
+		if c := clientCommand(text); c != nil {
+			got = c.Name
+		}
+		if got != want {
+			t.Errorf("%q: got %q, want %q", text, got, want)
+		}
+	}
+	list := withClientCommands([]slashCommand{{Name: "clear", Kind: "command"}, {Name: "review"}})
+	if len(list) != 3 || list[0].Name != "review" || list[1].Kind != "client" {
+		t.Errorf("merged list: %+v", list)
+	}
+	if got := rankCommands(list, "qui", false); len(got) != 1 || got[0].Name != "exit" {
+		t.Errorf("alias match: %+v", got)
+	}
+}
+
+// An Oh My Pi multiple-choice round ("(1 selected) …" with "Other" and "Done
+// selecting") reads as one checkbox question with an own-answer field.
+func TestQuestionBoxListsOptions(t *testing.T) {
+	in := json.RawMessage(`{"questions":[{"question":"(1 selected) Pick colors","header":"Response","options":[
+		{"label":"Red"},{"label":"Green"},{"label":"Blue"},{"label":"Other (type your own)"},{"label":"[+] Done selecting"}]}]}`)
+	meta := json.RawMessage(`{"extensionUiMethod":"select","answerHeader":"Response"}`)
+	m := Model{perms: map[string][]PermissionReq{"a": {{ID: "r", Kind: "question", Input: in, Metadata: meta}}}}
+	_, qs, _ := m.pendingQuestion("a")
+	if q := qs[0]; !q.MultiSelect || !q.AllowOther || len(q.Options) != 3 || q.Question != "Pick colors" || q.omp.done != "[+] Done selecting" {
+		t.Fatalf("round read as %+v", q)
+	}
+	box := ansi.Strip(m.permBox(Agent{ID: "a"}, 100))
+	for _, want := range []string{"Pick colors", "☐ Red", "☐ Blue", "Other: your own answer"} {
+		if !strings.Contains(box, want) {
+			t.Errorf("box lacks %q:\n%s", want, box)
+		}
+	}
+	if strings.Contains(box, "Done selecting") || strings.Contains(box, "(1 selected)") {
+		t.Errorf("box shows omp's round mechanics:\n%s", box)
+	}
+}
+
+// An answered Oh My Pi multiple choice is sent round by round: each pick, then
+// "Other" and its text, then "Done selecting"; a round of another question is left alone.
+func TestAskPlanRounds(t *testing.T) {
+	meta := func(method string) json.RawMessage { return json.RawMessage(`{"extensionUiMethod":"` + method + `"}`) }
+	round := func(id, method, title string) PermissionReq {
+		in := `{"questions":[{"question":"` + title + `","header":"Response","options":[]}]}`
+		return PermissionReq{ID: id, Kind: "question", Title: title, Input: json.RawMessage(in), Metadata: meta(method)}
+	}
+	plan := &askPlan{title: "Pick colors", picks: []string{"Red", "Blue"}, custom: "purple", done: "[+] Done selecting", answered: map[string]bool{}}
+	m := Model{perms: map[string][]PermissionReq{}, askPlans: map[string]*askPlan{"a": plan}}
+	steps := []struct {
+		req   PermissionReq
+		check func() bool
+	}{
+		{round("1", "select", "Pick colors"), func() bool { return len(plan.picks) == 1 }},
+		{round("2", "select", "(1 selected) Pick colors"), func() bool { return len(plan.picks) == 0 && !plan.customSent }},
+		{round("3", "select", "(2 selected) Pick colors"), func() bool { return plan.customSent && plan.custom == "purple" }},
+		{round("4", "input", "Pick colors"), func() bool { return plan.custom == "" && !plan.finished }},
+		{round("5", "select", "(3 selected) Pick colors"), func() bool { return plan.finished }},
+	}
+	for i, s := range steps {
+		m.perms["a"] = []PermissionReq{s.req}
+		if m.driveAsk("a") == nil || !s.check() {
+			t.Fatalf("round %d (%s %q) not answered as planned: %+v", i+1, s.req.Metadata, s.req.Title, plan)
+		}
+		if m.driveAsk("a") != nil {
+			t.Fatalf("round %d answered twice", i+1)
+		}
+	}
+	other := &askPlan{title: "Pick colors", picks: []string{"Red"}, answered: map[string]bool{}}
+	m.askPlans["a"] = other
+	m.perms["a"] = []PermissionReq{round("9", "select", "Something else")}
+	if m.driveAsk("a") != nil || m.askPlans["a"] != nil {
+		t.Fatal("a different question was answered from the plan")
 	}
 }

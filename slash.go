@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -18,10 +19,45 @@ import (
 // enter inserts the choice, esc closes the list.
 
 type slashCommand struct {
-	Name         string `json:"name"`
-	Description  string `json:"description"`
-	ArgumentHint string `json:"argumentHint"`
-	Kind         string `json:"kind"` // command | skill
+	Name         string   `json:"name"`
+	Description  string   `json:"description"`
+	ArgumentHint string   `json:"argumentHint"`
+	Kind         string   `json:"kind"` // command | skill, or client for paseo-tui's own
+	Aliases      []string `json:"-"`
+}
+
+// clientCommands are run by paseo-tui itself, never sent to the agent: the
+// desktop's own commands, with the same names and aliases.
+var clientCommands = []slashCommand{
+	{Name: "clear", Aliases: []string{"new"}, Kind: "client",
+		Description: "Archive this agent and start a fresh one with the same setup"},
+	{Name: "exit", Aliases: []string{"quit", "q"}, Kind: "client", Description: "Archive this agent"},
+}
+
+// clientCommand is the client command a whole message names ("/clear", "/q"), if any.
+func clientCommand(text string) *slashCommand {
+	name, ok := strings.CutPrefix(strings.TrimSpace(text), "/")
+	if !ok || name == "" || strings.ContainsAny(name, " \t\n") {
+		return nil
+	}
+	for i, c := range clientCommands {
+		if c.Name == name || slices.Contains(c.Aliases, name) {
+			return &clientCommands[i]
+		}
+	}
+	return nil
+}
+
+// withClientCommands is the agent's list plus the client commands, which win
+// over an agent command of the same name (as in the desktop) and come last.
+func withClientCommands(cmds []slashCommand) []slashCommand {
+	out := make([]slashCommand, 0, len(cmds)+len(clientCommands))
+	for _, c := range cmds {
+		if clientCommand("/"+c.Name) == nil {
+			out = append(out, c)
+		}
+	}
+	return append(out, clientCommands...)
 }
 
 type slashMenu struct {
@@ -89,24 +125,15 @@ func rankCommands(cmds []slashCommand, query string, inline bool) []slashCommand
 		if inline && c.Kind != "skill" {
 			continue
 		}
-		name := strings.ToLower(c.Name)
-		s := scored{c: c}
-		switch i := strings.Index(name, q); {
-		case q == "":
-		case name == q:
-			s.tier = 0
-		case i == 0:
-			s.tier = 1
-		case i > 0 && !unicode.IsLetter(rune(name[i-1])) && !unicode.IsDigit(rune(name[i-1])):
-			s.tier, s.where = 2, i
-		case i > 0:
-			s.tier, s.where = 3, i
-		default:
-			at, ok := subsequence(name, q)
-			if !ok {
-				continue
+		s := scored{c: c, tier: -1}
+		for _, name := range append([]string{c.Name}, c.Aliases...) {
+			tier, where, ok := matchName(strings.ToLower(name), q)
+			if ok && (s.tier < 0 || tier < s.tier || tier == s.tier && where < s.where) {
+				s.tier, s.where = tier, where
 			}
-			s.tier, s.where = 4, at
+		}
+		if s.tier < 0 {
+			continue
 		}
 		out = append(out, s)
 	}
@@ -127,6 +154,23 @@ func rankCommands(cmds []slashCommand, query string, inline bool) []slashCommand
 		res[i] = s.c
 	}
 	return res
+}
+
+// matchName ranks how q matches name: exact, prefix, word start, substring,
+// then letters in order (lower is better), and where.
+func matchName(name, q string) (tier, where int, ok bool) {
+	switch i := strings.Index(name, q); {
+	case q == "" || name == q:
+		return 0, 0, true
+	case i == 0:
+		return 1, 0, true
+	case i > 0 && !unicode.IsLetter(rune(name[i-1])) && !unicode.IsDigit(rune(name[i-1])):
+		return 2, i, true
+	case i > 0:
+		return 3, i, true
+	}
+	at, ok := subsequence(name, q)
+	return 4, at, ok
 }
 
 // subsequence reports whether q's letters appear in s in order, and where the first one is.
@@ -173,7 +217,7 @@ func (m *Model) refreshSlash() tea.Cmd {
 	}
 	opening := m.slash == nil || m.slash.key != key
 	menu := &slashMenu{key: key, start: start, col: col, eol: col == len(line), inline: row != 0 || start != 0, query: query}
-	menu.items = rankCommands(m.commands[a.ID], query, menu.inline)
+	menu.items = rankCommands(withClientCommands(m.commands[a.ID]), query, menu.inline)
 	if prev := m.slash; prev != nil && !opening && prev.sel < len(prev.items) {
 		for i, c := range menu.items { // keep the highlighted entry while typing
 			if c.Name == prev.items[prev.sel].Name {
@@ -189,26 +233,30 @@ func (m *Model) refreshSlash() tea.Cmd {
 }
 
 // slashKey handles a key while the list is open; it reports whether it used it.
-func (m *Model) slashKey(k tea.KeyMsg) bool {
+func (m *Model) slashKey(k tea.KeyMsg) (bool, tea.Cmd) {
 	s := m.slash
 	switch k.String() {
 	case "esc":
 		m.slash, m.slashDismissed = nil, s.key
-		return true
+		return true, nil
 	case "up", "down":
 		if n := len(s.items); n > 0 {
 			d := map[string]int{"up": -1, "down": 1}[k.String()]
 			s.sel = (s.sel + d + n) % n
 		}
-		return true
+		return true, nil
 	case "tab", "enter":
 		if len(s.items) == 0 {
-			return k.String() == "tab" // enter with nothing to pick sends the message
+			return k.String() == "tab", nil // enter with nothing to pick sends the message
 		}
-		m.acceptSlash(s.items[s.sel])
-		return true
+		c := s.items[s.sel]
+		if c.Kind == "client" && !s.inline && len(m.attachments) == 0 {
+			return true, m.runClientCommand(c) // runs at once, like the desktop
+		}
+		m.acceptSlash(c)
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 // acceptSlash replaces the typed "/query" with the chosen "/name".
@@ -224,6 +272,28 @@ func (m *Model) acceptSlash(c slashCommand) {
 	m.input.InsertString(text)
 	m.slash, m.slashDismissed = nil, s.key
 	m.fitInput()
+}
+
+// runClientCommand runs /exit (archive the agent) or /clear (archive it and
+// open a fresh agent with its provider, model, thinking, mode and options).
+func (m *Model) runClientCommand(c slashCommand) tea.Cmd {
+	a := m.current()
+	if a == nil || m.selSub != nil {
+		return nil
+	}
+	m.input.Reset()
+	m.fitInput()
+	m.slash, m.slashDismissed = nil, ""
+	archive := m.call("Archived "+truncate(agentLabel(*a), 40), "archive", map[string]any{"agentId": a.ID})
+	// leave the message box first: closing the form must not drop keys into another agent's composer
+	m.focus = focusList
+	m.input.Blur()
+	if c.Name != "clear" {
+		return archive
+	}
+	mm, open := m.openFork(true)
+	*m = mm.(Model)
+	return tea.Batch(archive, open)
 }
 
 // slashView is the list, drawn over the bottom of the transcript above the composer.
@@ -254,8 +324,11 @@ func (m Model) slashView(w int) string {
 			hint = " " + c.ArgumentHint
 		}
 		kind := ""
-		if c.Kind == "skill" && !s.inline {
+		switch {
+		case c.Kind == "skill" && !s.inline:
 			kind = "skill "
+		case c.Kind == "client":
+			kind = "paseo "
 		}
 		left := " " + sBold.Render(name) + sMuted.Render(hint)
 		right := sMuted.Render(kind)

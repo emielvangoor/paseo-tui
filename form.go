@@ -97,6 +97,7 @@ type forkSource struct {
 	context                              json.RawMessage // the chat-history attachment; nil while loading
 	items                                int
 	err                                  string
+	fresh                                bool // /clear: the same setup, without the chat history
 }
 
 type forkContextMsg struct {
@@ -441,9 +442,9 @@ func (f *NewAgentForm) trySubmit() (bool, bool, string, tea.Cmd) {
 		f.err = "Choose a project."
 	case f.provider == "":
 		f.err = "Choose a provider."
-	case f.fork != nil && f.fork.err != "":
+	case f.fork != nil && !f.fork.fresh && f.fork.err != "":
 		f.err = "Chat history: " + f.fork.err
-	case f.fork != nil && f.fork.context == nil:
+	case f.fork != nil && !f.fork.fresh && f.fork.context == nil:
 		f.err = "Still loading the chat history…"
 	default:
 		return true, true, "", nil
@@ -473,7 +474,9 @@ func (f *NewAgentForm) Request() (op string, fields map[string]any) {
 		agent["images"] = f.attachments
 	}
 	if fk := f.fork; fk != nil {
-		agent["attachments"] = []json.RawMessage{fk.context}
+		if !fk.fresh {
+			agent["attachments"] = []json.RawMessage{fk.context}
+		}
 		if f.provider == fk.provider { // the source's mode and options only mean something to its provider
 			if fk.modeID != "" {
 				agent["modeId"] = fk.modeID
@@ -566,6 +569,9 @@ func (f *NewAgentForm) View(m Model) string {
 		if f.iso == isoThis {
 			title = fmt.Sprintf("Fork %q into a new tab", truncate(fk.name, inner-28))
 		}
+		if fk.fresh {
+			title = fmt.Sprintf("Fresh start after %q (archived)", truncate(fk.name, inner-34))
+		}
 	}
 	lines := []string{sAccent.Render(" " + title), ""}
 
@@ -597,7 +603,7 @@ func (f *NewAgentForm) View(m Model) string {
 		}
 		lines = append(lines, sAccent.Render(" "+truncate(strings.Join(names, "  "), inner-2)))
 	}
-	if fk := f.fork; fk != nil {
+	if fk := f.fork; fk != nil && !fk.fresh {
 		switch {
 		case fk.err != "":
 			lines = append(lines, sRed.Render(" ⑂ chat history: "+truncate(fk.err, inner-20)))

@@ -192,6 +192,7 @@ message box: `esc` leaves it, `i` or `enter` goes back in.
 |---|---|
 | `i` · `enter` | Write to the focused agent (`enter` sends, `alt+enter` adds a newline, `esc` leaves). When the agent waits on you, `enter` opens that instead |
 | `/` | The agent's commands and skills, as in the desktop: `/` at the start of a message lists both, `/` later in a message lists skills. Type to filter, `↑` / `↓` choose, `tab` or `enter` inserts, `esc` closes |
+| `/clear` · `/new` · `/exit` · `/q` | Handled by paseo-tui, as in the desktop: `/exit` archives the agent; `/clear` archives it and opens a fresh one with the same setup |
 | `↑` / `↓` (in the composer) | Previous / next prompt from history |
 | `ctrl+v` | Paste an image from the clipboard (pasting or dropping an image path works too) |
 | `n` · `ctrl+n` | New agent in this workspace (a new tab) |
@@ -201,7 +202,7 @@ message box: `esc` leaves it, `i` or `enter` goes back in.
 | `m` | Agent settings: model, thinking level, mode, toggles such as Fast |
 | `s` | Stop the running agent (asks; `s` again or `y` confirms) |
 | `enter` · `x` | A pending tool permission: review it (the full command; `y` allows, `n` denies, `esc` decides later) · deny it straight away |
-| `enter` · `x` | A pending question (e.g. Claude's AskUserQuestion): answer it, picking an option or typing your own · dismiss it |
+| `enter` · `x` | A pending question (e.g. Claude's AskUserQuestion): answer it in one scrollable form with every question, picking options or typing your own answer · dismiss it |
 | `u` | Subagents of this agent; open one as a `↳` tab (`w` or `ctrl+w` closes it) |
 | `a` | Archive the agent or the workspace, delete the agent, or remove a project (always confirms) |
 | `delete` | Delete the agent permanently (asks; `fn+delete` on a Mac keyboard) |

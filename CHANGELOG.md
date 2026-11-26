@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- `/clear` (or `/new`) and `/exit` (or `/quit`, `/q`) work as in the desktop app instead of being sent to
+  the agent: `/exit` archives the agent, `/clear` archives it and opens a fresh agent in this workspace
+  with the same provider, model, thinking level, mode and options. Both are listed under `/`.
+- When an omp agent is stuck in its `ask` tool, the line above the message box says so: omp 19 asks with an
+  HTML form, which Paseo's omp adapter drops ([getpaseo/paseo#10471](https://github.com/getpaseo/paseo/issues/10471)),
+  so no question ever arrives. Sending a message ends the wait and reaches the agent as the answer.
+- A pending question shows its options in the box above the message field (all of them when there are
+  10 or fewer), not only after pressing `enter`.
+
+### Changed
+
+- The question dialog shows every question of a request in one scrollable form: options as radio buttons
+  or checkboxes, and an "Other" field on the same list where you type your own answer directly (typing on
+  any option starts it). `↑` / `↓` move, `tab` jumps to the next question, `enter` picks, `ctrl+s` or
+  "Send answers" sends; sending with a question left open points at it.
+- Oh My Pi's multiple choice is one checkbox list instead of one pick per round: paseo-tui sends omp's
+  rounds itself (each pick, "Other" and its text, then "Done selecting"), and opens the form's next
+  question on its own when omp asks it.
+
 ## [0.7.0] - 2026-11-25
 
 ### Added

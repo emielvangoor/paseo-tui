@@ -157,6 +157,7 @@ type Model struct {
 	renaming       *renameForm
 	panes          map[paneID]*termPane // floating terminal panes (e editor, F files) per workspace, also while hidden
 	question       *questionForm        // the open answer form of an agent's question
+	askPlans       map[string]*askPlan  // agent -> an Oh My Pi question being answered round by round
 	history        *historyList         // History (H): all agents, archived ones included
 	paneShown      paneID               // which one ovPane shows
 	pendingNewForm *NewAgentForm        // New workspace form waiting for "+ Add project…" to finish
@@ -206,6 +207,7 @@ func NewModel(cfg BridgeConfig) Model {
 		commands:   map[string][]slashCommand{},
 		cmdLoading: map[string]bool{},
 		cmdErr:     map[string]string{},
+		askPlans:   map[string]*askPlan{},
 		wsViews:    map[string]*wsView{},
 		timeline:   NewTimeline(),
 		render:     NewRenderer(lipgloss.HasDarkBackground()),
@@ -318,7 +320,7 @@ func (m *Model) handleBridge(b BridgeMsg) tea.Cmd {
 				}
 			}
 		}
-		return m.reconcile(hadPerm)
+		return tea.Batch(m.reconcile(hadPerm), m.driveAsks())
 	case "workspaces":
 		hadPerm := m.permHeight()
 		m.wsKnown = true
@@ -823,9 +825,64 @@ func (m *Model) fitInput() {
 
 func (m *Model) permHeight() int {
 	if a := m.current(); a != nil && len(m.perms[a.ID]) > 0 {
-		return 4
+		return lipgloss.Height(m.permBox(*a, m.mainW()))
 	}
 	return 0
+}
+
+// permBox is the box above the message field for the agent's first pending
+// request: a tool permission, or a question with its options listed.
+func (m Model) permBox(a Agent, w int) string {
+	perms := m.perms[a.ID]
+	p := perms[0]
+	more := ""
+	if len(perms) > 1 {
+		more = sMuted.Render(fmt.Sprintf("  (+%d more)", len(perms)-1))
+	}
+	inner := max(20, w-5)
+	var lines []string
+	if plan := m.askPlans[a.ID]; plan != nil && !plan.finished {
+		lines = append(lines, sYellow.Bold(true).Render("? Question")+sMuted.Render("  sending your answer…"))
+	} else if _, qs, ok := m.pendingQuestion(a.ID); ok {
+		q := qs[0]
+		head := sYellow.Bold(true).Render("? Question") + more
+		if len(qs) > 1 {
+			head += sMuted.Render(fmt.Sprintf("  1 of %d", len(qs)))
+		}
+		lines = append(lines, head)
+		text := strings.Split(lipgloss.NewStyle().Width(inner).Render(sBold.Render(strings.TrimSpace(q.Question))), "\n")
+		if len(text) > 4 {
+			text = append(text[:3], sMuted.Render("… (enter shows all of it)"))
+		}
+		lines = append(lines, text...)
+		shown := len(q.Options)
+		if shown > 10 {
+			shown = 7
+		}
+		mark := "○ "
+		if q.MultiSelect {
+			mark = "☐ "
+		}
+		for i, o := range q.Options {
+			if i == shown {
+				lines = append(lines, sMuted.Render(fmt.Sprintf("   … %d more (enter lists them all)", len(q.Options)-shown)))
+				break
+			}
+			lines = append(lines, truncate("  "+sMuted.Render(mark)+o.Label, inner))
+		}
+		if q.showsText() && len(q.Options) > 0 {
+			lines = append(lines, "  "+sMuted.Render(mark+"Other: your own answer"))
+		}
+		keys := sGreen.Render("enter answer") + sMuted.Render(" · ") + sRed.Render("x dismiss")
+		if len(qs) > 1 {
+			keys += sMuted.Render(fmt.Sprintf("   ·   all %d questions in one form", len(qs)))
+		}
+		lines = append(lines, keys)
+	} else {
+		lines = append(lines, sRed.Bold(true).Render("⚠ Permission: ")+sBold.Render(p.Name)+more,
+			truncate(firstLine(permissionSummary(p)), w-24)+"   "+sGreen.Render("enter review")+sMuted.Render(" · ")+sRed.Render("x deny"))
+	}
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).Width(w - 3).Render(strings.Join(lines, "\n"))
 }
 
 func (m *Model) refreshViewport() {
@@ -1367,8 +1424,15 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.focus == focusInput {
-		if m.slash != nil && m.slashKey(k) {
-			return m, nil
+		if m.slash != nil {
+			if used, cmd := m.slashKey(k); used {
+				return m, cmd
+			}
+		}
+		if k.String() == "enter" && len(m.attachments) == 0 {
+			if c := clientCommand(m.input.Value()); c != nil { // /clear, /exit: never sent to the agent
+				return m, m.runClientCommand(*c)
+			}
 		}
 		if k.Paste {
 			if paths := imagePathsIn(string(k.Runes)); len(paths) > 0 {
@@ -1608,7 +1672,7 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "m":
 		return m.openSettings()
 	case "f":
-		return m.openFork()
+		return m.openFork(false)
 	case "r":
 		return m.openRename()
 	case "H":
@@ -1858,8 +1922,9 @@ func (m Model) openNewFormMode(asTab bool, projectID string) (tea.Model, tea.Cmd
 }
 
 // openFork opens the New agent form as a fork of the focused agent: a new tab in
-// this workspace (or, via Where, a new workspace) that starts from its chat history.
-func (m Model) openFork() (tea.Model, tea.Cmd) {
+// this workspace (or, via Where, a new workspace) that starts from its chat
+// history. fresh (/clear) starts with the same setup but without the history.
+func (m Model) openFork(fresh bool) (tea.Model, tea.Cmd) {
 	a := m.current()
 	if a == nil || m.selSub != nil {
 		m.setStatus("Open an agent tab to fork it", true)
@@ -1874,11 +1939,15 @@ func (m Model) openFork() (tea.Model, tea.Cmd) {
 	f := m.form
 	src := &forkSource{
 		agentID: a.ID, name: agentLabel(*a), provider: a.Snap.Provider, cwd: a.Cwd,
-		modeID: deref(a.Snap.CurrentModeID), options: a.Snap.Options,
+		modeID: deref(a.Snap.CurrentModeID), options: a.Snap.Options, fresh: fresh,
 	}
 	f.fork = src
 	f.provider, f.model, f.thinking = a.Snap.Provider, currentModel(a), deref(a.Snap.ThinkingOptionID)
 	f.prompt.Placeholder = "What should the fork do next?"
+	if fresh {
+		f.prompt.Placeholder = "What should the new agent do?"
+		return m, tea.Batch(cmd, m.loadModels(f.provider))
+	}
 	br := m.br
 	load := func() tea.Msg {
 		data, err := br.Call("forkContext", map[string]any{"agentId": src.agentID}, 30*time.Second)
@@ -2365,26 +2434,8 @@ func (m Model) viewMain(h int) string {
 	}
 	parts := []string{head, vp}
 
-	if perms := m.perms[a.ID]; len(perms) > 0 {
-		p := perms[0]
-		more := ""
-		if len(perms) > 1 {
-			more = sMuted.Render(fmt.Sprintf("  (+%d more)", len(perms)-1))
-		}
-		desc := permissionSummary(p)
-		head := sRed.Bold(true).Render("⚠ Permission: ") + sBold.Render(p.Name) + more
-		keys := sGreen.Render("enter review") + sMuted.Render(" · ") + sRed.Render("x deny")
-		if qp, qs, ok := m.pendingQuestion(a.ID); ok {
-			p, desc = qp, qs[0].Question
-			if desc == p.Title {
-				desc = p.Description // the options, e.g. "Red / Green / Blue"
-			}
-			head = sYellow.Bold(true).Render("? Question: ") + sBold.Render(orDefault(p.Title, orDefault(qs[0].Header, p.Name))) + more
-			keys = sGreen.Render("enter answer") + sMuted.Render(" · ") + sRed.Render("x dismiss")
-		}
-		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(cRed).Width(w - 3).Render(
-			head + "\n" + truncate(firstLine(desc), w-24) + "   " + keys)
-		parts = append(parts, box)
+	if len(m.perms[a.ID]) > 0 {
+		parts = append(parts, m.permBox(*a, w))
 	}
 
 	// one status line: what the agent is doing, and its subagents
@@ -2401,7 +2452,10 @@ func (m Model) viewMain(h int) string {
 // subagents and scroll position on the right.
 func (m Model) composerStatus(a Agent, w int) string {
 	left := ""
-	if a.Status == "running" {
+	if a.Status == "running" && m.strandedAsk(a) {
+		left = " " + sYellow.Bold(true).Render("? The agent asked with a form Paseo can't show") +
+			sMuted.Render(" · reply with a message to continue, e.g. ask it to put the question in text (paseo#10471)")
+	} else if a.Status == "running" {
 		left = " " + m.activityLine(a)
 	} else if len(m.perms[a.ID]) > 0 {
 		left = " " + sRed.Bold(true).Render("! waiting for permission")
@@ -2419,6 +2473,21 @@ func (m Model) composerStatus(a Agent, w int) string {
 	}
 	left = truncate(left, max(0, w-lipgloss.Width(r)-2))
 	return left + strings.Repeat(" ", max(1, w-lipgloss.Width(left)-lipgloss.Width(r))) + r
+}
+
+// strandedAsk: an omp agent is waiting in its ask tool, but the daemon has no
+// question for it. omp 19 asks with an HTML form, which Paseo's omp adapter drops
+// (getpaseo/paseo#10471); a message ends the wait and reaches the agent as the answer.
+func (m Model) strandedAsk(a Agent) bool {
+	if a.Snap.Provider != "omp" || len(m.perms[a.ID]) > 0 || a.ID != m.selectedID || m.selSub != nil {
+		return false
+	}
+	for i := len(m.timeline.Entries) - 1; i >= 0; i-- {
+		if e := m.timeline.Entries[i]; e.Kind == "tool" {
+			return e.Tool.Status == "running" && e.Tool.Name == "ask"
+		}
+	}
+	return false
 }
 
 // subagentSummary is the compact form of the subagent track: active states, then the total.

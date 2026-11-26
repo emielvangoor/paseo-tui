@@ -124,7 +124,8 @@ type PermissionReq struct {
 	Title       string          `json:"title"`
 	Description string          `json:"description"`
 	Detail      json.RawMessage `json:"detail"`
-	Input       json.RawMessage `json:"input"` // a question's questions; echoed back with the answers
+	Input       json.RawMessage `json:"input"`    // a question's questions; echoed back with the answers
+	Metadata    json.RawMessage `json:"metadata"` // e.g. Oh My Pi's extensionUiMethod (select / input / …)
 }
 
 func StartBridge(node, script string, args, env []string) (*Bridge, error) {
