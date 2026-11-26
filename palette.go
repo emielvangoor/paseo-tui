@@ -124,6 +124,7 @@ func NewPalette(m *Model) *Palette {
 		{"f", "Fork agent into a new tab", "f"},
 		{"r", "Rename agent", "r"},
 		{"H", "History: open or restore archived agents", "H"},
+		{"c", "Settings: header, tabs, transcript, start-up…", "c"},
 		{"e", "Open the workspace in your editor", "e"},
 		{"F", files, "F"},
 		{"b", sidebar, "b"},

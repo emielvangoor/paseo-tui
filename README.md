@@ -207,6 +207,7 @@ message box: `esc` leaves it, `i` or `enter` goes back in.
 | `a` | Archive the agent or the workspace, delete the agent, or remove a project (always confirms) |
 | `delete` | Delete the agent permanently (asks; `fn+delete` on a Mac keyboard) |
 | `H` | History, like the desktop's: every agent including archived ones, searchable; `enter` opens one, and restores it first (with its workspace or worktree) when archived |
+| `c` | Settings: start-up view, header (branch, PR, diff), model label, workspace numbers, thinking and tool output, scroll speed, keyboard hints, quit confirmation, terminal title, update check, editor and file manager. Saved to `config.toml` on every change |
 | `e` | Open the workspace in your editor in a floating pane: `$VISUAL`, `$EDITOR`, else nvim or vim (`ctrl+\` hides it, `e` brings it back, quitting the editor closes it). GUI editors need their terminal mode, e.g. `VISUAL="emacs -nw"` |
 | `F` | Browse the workspace's files in a floating pane with ranger, yazi, lf or nnn (the first one installed; `ctrl+\` hides it, `F` brings it back). Without one, opens the directory in Finder, Explorer or the Linux file manager |
 
@@ -254,6 +255,7 @@ UI reacts instantly and nothing is polled.
 | What | Where |
 |---|---|
 | UI state per host (folded projects, panel widths, grouping, New-workspace choices) | `<config dir>/paseo-tui/state.json` |
+| Settings (`c`, or edit the file: changes apply while the app runs) | `<config dir>/paseo-tui/config.toml` |
 | Prompt history | `~/.local/state/paseo-tui/history.json` (`$XDG_STATE_HOME`) |
 | Unpacked bridge, pasted images | `<cache dir>/paseo-tui/` |
 

@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -42,6 +44,7 @@ const (
 	ovPane
 	ovQuestion
 	ovHistory
+	ovPrefs
 )
 
 // ---------- messages ----------
@@ -166,6 +169,10 @@ type Model struct {
 	modelCache     map[string][]ModelInfo // provider -> models
 	vpLines        []string               // rendered transcript lines, for mouse selection
 	hist           *promptHistory
+	prefs          *Config     // settings (config.toml), changed in the settings panel (c) or the file
+	confStamp      fileStamp   // config.toml as last read or written, to notice edits
+	prefsPanel     *prefsPanel // the settings panel (c)
+	startupDone    bool        // the start-up choice (open the command center) was made
 	// slash commands in the composer
 	slash          *slashMenu
 	slashDismissed string                    // the slash list closed with esc, until its "/" goes away
@@ -192,6 +199,15 @@ func NewModel(cfg BridgeConfig) Model {
 	sp.Spinner = spinner.MiniDot
 	sp.Style = sYellow
 
+	prefs, err := loadConfig(configPath())
+	prefsErr := ""
+	if err != nil {
+		prefsErr = "Settings: " + err.Error()
+	} else if _, statErr := os.Stat(configPath()); errors.Is(statErr, fs.ErrNotExist) {
+		_ = saveConfig(configPath(), prefs) // a file to find and edit, with every setting described
+	}
+	render := NewRenderer(lipgloss.HasDarkBackground())
+	render.ShowThk, render.Verbose = prefs.Transcript.Thinking, prefs.Transcript.Verbose
 	return Model{
 		cfg:        cfg,
 		hostKey:    cfg.HostLabel,
@@ -210,18 +226,30 @@ func NewModel(cfg BridgeConfig) Model {
 		askPlans:   map[string]*askPlan{},
 		wsViews:    map[string]*wsView{},
 		timeline:   NewTimeline(),
-		render:     NewRenderer(lipgloss.HasDarkBackground()),
+		render:     render,
 		vp:         viewport.New(80, 20),
 		input:      ta,
 		spin:       sp,
 		follow:     true,
+		prefs:      prefs,
+		confStamp:  stampOf(configPath()),
+		status:     prefsErr,
+		statusT:    time.Now(),
+		isErr:      prefsErr != "",
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	// Init has a value receiver, so the bridge is started from Update where state sticks.
 	start := func() tea.Msg { return bridgeRestartMsg{} }
-	return tea.Batch(start, m.spin.Tick, tea.SetWindowTitle("paseo"), checkForUpdateCmd())
+	cmds := []tea.Cmd{start, m.spin.Tick, configTick()}
+	if m.prefs.Behavior.TerminalTitle {
+		cmds = append(cmds, tea.SetWindowTitle("paseo"))
+	}
+	if m.prefs.Behavior.UpdateCheck {
+		cmds = append(cmds, checkForUpdateCmd())
+	}
+	return tea.Batch(cmds...)
 }
 
 // ---------- bridge plumbing ----------
@@ -326,7 +354,25 @@ func (m *Model) handleBridge(b BridgeMsg) tea.Cmd {
 		m.wsKnown = true
 		m.workspaces = b.Workspaces
 		m.emptyProjects = b.EmptyProjects
-		return m.reconcile(hadPerm)
+		cmd := m.reconcile(hadPerm)
+		if !m.startupDone { // the start-up choice: the command center or the New workspace form
+			m.startupDone = true
+			if m.overlay == ovNone {
+				var mm tea.Model
+				var c tea.Cmd
+				switch m.prefs.Startup.Open {
+				case "command-center":
+					mm, c = m.openPalette()
+				case "new":
+					mm, c = m.openNewFormMode(false, "")
+				}
+				if mm != nil {
+					*m = mm.(Model)
+					cmd = tea.Batch(cmd, c)
+				}
+			}
+		}
+		return cmd
 	case "history":
 		if b.AgentID != m.streamID {
 			return nil
@@ -795,7 +841,7 @@ func (m *Model) setCollapsed(project string, v bool) {
 func (m *Model) layout() {
 	rightW := m.mainW()
 	m.input.SetWidth(rightW - 4) // inside the composer's border and padding
-	vpH := m.height - 1 /*footer*/ - 2 /*workspace, tabs*/ - 1 /*status*/ - 2 /*box border*/ - m.input.Height() - m.permHeight() - m.attachHeight()
+	vpH := m.height - 1 /*footer*/ - m.headLines() /*header, tabs*/ - 1 /*status*/ - 2 /*box border*/ - m.input.Height() - m.permHeight() - m.attachHeight()
 	m.vp.Width = rightW - 1
 	m.vp.Height = max(3, vpH)
 	m.render.SetWidth(rightW - 2)
@@ -910,9 +956,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return next, cmd
 	}
-	if t := nm.windowTitle(); t != nm.title {
-		nm.title = t
-		cmd = tea.Batch(cmd, tea.SetWindowTitle(t))
+	want := ""
+	if nm.prefs.Behavior.TerminalTitle {
+		want = nm.windowTitle()
+	}
+	if want != nm.title {
+		nm.title = want
+		cmd = tea.Batch(cmd, tea.SetWindowTitle(want))
 	}
 	return nm, cmd
 }
@@ -953,6 +1003,10 @@ func titleSafe(s string, max int) string {
 
 func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case configTickMsg:
+		m.checkConfigFile()
+		return m, configTick()
+
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		for _, p := range m.runningPanes() {
@@ -1334,6 +1388,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.questionKey(k)
 	case ovHistory:
 		return m, m.historyKey(k)
+	case ovPrefs:
+		return m, m.prefsKey(k)
 	case ovSubs:
 		done, pick := m.subList.Update(k)
 		if done {
@@ -1677,6 +1733,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openRename()
 	case "H":
 		return m.openHistory()
+	case "c":
+		return m.openPrefs()
 	case "e":
 		return m.openPane(paneEditor)
 	case "F":
@@ -1742,21 +1800,14 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// Scroll steps in lines. A trackpad sends a wheel event every few
-// milliseconds, so the ramp is gentle: a single notch moves wheelBase lines, a
-// long fast spin works up to wheelMax per event.
-const (
-	wheelBase = 2
-	wheelMax  = 8
-	lineStep  = 3 // j / k
-)
-
-// wheel scrolls the transcript, speeding up while the wheel keeps spinning.
+// wheel scrolls the transcript by the settings' lines per notch, speeding up
+// (one line per step, up to the settings' fastest) while the wheel keeps
+// spinning; a trackpad sends a wheel event every few milliseconds.
 func (m *Model) wheel(up bool) {
 	if time.Since(m.lastWheel) < 60*time.Millisecond {
-		m.wheelSpeed = min(m.wheelSpeed+1, wheelMax)
+		m.wheelSpeed = min(m.wheelSpeed+1, m.prefs.Transcript.WheelMax)
 	} else {
-		m.wheelSpeed = wheelBase
+		m.wheelSpeed = m.prefs.Transcript.WheelLines
 	}
 	m.lastWheel = time.Now()
 	if up {
@@ -1778,9 +1829,9 @@ func (m Model) scroll(key string) (tea.Model, tea.Cmd) {
 	case "ctrl+d":
 		m.vp.HalfViewDown()
 	case "K":
-		m.vp.LineUp(lineStep)
+		m.vp.LineUp(m.prefs.Transcript.KeyLines)
 	case "J":
-		m.vp.LineDown(lineStep)
+		m.vp.LineDown(m.prefs.Transcript.KeyLines)
 	case "g":
 		m.vp.GotoTop()
 	case "G":
@@ -2051,8 +2102,13 @@ func (m *Model) submitNewForm() tea.Cmd {
 	}
 }
 
-// quit asks before exiting; the question warns when hidden panes would close with it.
+// quit asks before exiting (unless the settings say not to); open panes are
+// always asked about, since they close with it.
 func (m Model) quit(key string) (tea.Model, tea.Cmd) {
+	if !m.prefs.Behavior.ConfirmQuit && len(m.runningPanes()) == 0 {
+		m.shutdown()
+		return m, tea.Quit
+	}
 	q := "Quit paseo-tui?"
 	if ps := m.runningPanes(); len(ps) > 0 {
 		var names []string
@@ -2272,6 +2328,8 @@ func (m Model) View() string {
 		return m.centerOver(screen, m.questionView())
 	case ovHistory:
 		return m.centerOver(screen, m.historyView())
+	case ovPrefs:
+		return m.centerOver(screen, m.prefsView())
 	}
 	return screen
 }
@@ -2291,7 +2349,10 @@ func (m Model) viewFooter() string {
 	if m.focus == focusInput {
 		keys = "enter send · alt+enter newline · ↑↓ history · ctrl+v image · esc done"
 	}
-	left := sMuted.Render(" " + keys)
+	left := ""
+	if m.prefs.Footer.Hints {
+		left = sMuted.Render(" " + keys)
+	}
 	switch {
 	case m.down:
 		left = sRed.Render(" ● daemon unreachable") + sMuted.Render(" · "+m.hostKey+" · r retry")
@@ -2369,31 +2430,16 @@ func (m Model) viewMain(h int) string {
 		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, msg)
 	}
 
-	// workspace line: project › workspace, branch, PR, diff
-	ws := v.ws
-	wsParts := []string{sMuted.Render(ws.ProjectName()+" ›") + " " + sBold.Render(v.title())}
-	if b := ws.Branch(); b != "" && b != ws.DisplayName() {
-		wsParts = append(wsParts, sMuted.Render("⎇ "+b))
-	} else if ws.IsWorktree() {
-		wsParts = append(wsParts, sMuted.Render("⎇ worktree"))
-	}
-	if gh := ws.GithubRuntime; gh != nil && gh.PullRequest != nil {
-		wsParts = append(wsParts, sBlue.Render(fmt.Sprintf("PR #%d", gh.PullRequest.Number)))
-	}
-	if d := ws.DiffStat; d != nil && (d.Additions > 0 || d.Deletions > 0) {
-		wsParts = append(wsParts, sGreen.Render(fmt.Sprintf("+%d", d.Additions))+" "+sRed.Render(fmt.Sprintf("−%d", d.Deletions)))
-	}
-	wsLine := truncate(" "+strings.Join(wsParts, "  "), w)
-	tabBar := m.viewTabs(v, w)
+	head := m.viewHead(v, w)
 
 	if a == nil {
 		msg := sMuted.Render("No agents in this workspace yet.") + "\n\n" + sBold.Render("Press n to start one here.")
-		body := lipgloss.Place(w, max(1, h-2), lipgloss.Center, lipgloss.Center, msg)
-		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(wsLine + "\n" + tabBar + "\n" + body)
+		body := lipgloss.Place(w, max(1, h-m.headLines()), lipgloss.Center, lipgloss.Center, msg)
+		return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(head + "\n" + body)
 	}
 
 	if ref := m.selSub; ref != nil {
-		return m.viewSubTab(*ref, a, wsLine, tabBar, w, h)
+		return m.viewSubTab(*ref, a, head, w, h)
 	}
 
 	// agent meta line for the focused tab
@@ -2425,7 +2471,7 @@ func (m Model) viewMain(h int) string {
 	}
 	info = append(info, a.ShortID)
 	_ = info // the full agent status lives in the details panel (d)
-	head := lipgloss.NewStyle().MaxWidth(w).Render(wsLine + "\n" + tabBar)
+	head = lipgloss.NewStyle().MaxWidth(w).Render(head)
 
 	vp := m.viewportView()
 	if m.slash != nil && m.focus == focusInput {
@@ -2519,8 +2565,42 @@ func (m Model) composerBox(content string, w int) string {
 		Padding(0, 1).Width(w - 2).Render(content)
 }
 
+// headLines is how many lines the header (when shown) and the tab bar take.
+func (m Model) headLines() int {
+	if m.prefs.Header.Show {
+		return 2
+	}
+	return 1
+}
+
+// viewHead is the header (project › workspace, branch, PR, diff, as set in the
+// settings) over the tab bar.
+func (m Model) viewHead(v *wsView, w int) string {
+	tabBar := m.viewTabs(v, w)
+	h := m.prefs.Header
+	if !h.Show {
+		return tabBar
+	}
+	ws := v.ws
+	parts := []string{sMuted.Render(ws.ProjectName()+" ›") + " " + sBold.Render(v.title())}
+	if h.Branch {
+		if b := ws.Branch(); b != "" && b != ws.DisplayName() {
+			parts = append(parts, sMuted.Render("⎇ "+b))
+		} else if ws.IsWorktree() {
+			parts = append(parts, sMuted.Render("⎇ worktree"))
+		}
+	}
+	if gh := ws.GithubRuntime; h.PullRequest && gh != nil && gh.PullRequest != nil {
+		parts = append(parts, sBlue.Render(fmt.Sprintf("PR #%d", gh.PullRequest.Number)))
+	}
+	if d := ws.DiffStat; h.Diff && d != nil && (d.Additions > 0 || d.Deletions > 0) {
+		parts = append(parts, sGreen.Render(fmt.Sprintf("+%d", d.Additions))+" "+sRed.Render(fmt.Sprintf("−%d", d.Deletions)))
+	}
+	return truncate(" "+strings.Join(parts, "  "), w) + "\n" + tabBar
+}
+
 // viewSubTab shows a provider subagent's transcript, read-only.
-func (m Model) viewSubTab(ref subRef, parent *Agent, wsLine, tabBar string, w, h int) string {
+func (m Model) viewSubTab(ref subRef, parent *Agent, head string, w, h int) string {
 	sub := m.subs[ref.ParentID][ref.SubID]
 	b, status, kind := bDone, "", ""
 	if sub != nil {
@@ -2539,7 +2619,6 @@ func (m Model) viewSubTab(ref subRef, parent *Agent, wsLine, tabBar string, w, h
 		meta += sMuted.Render(" · " + kind)
 	}
 	meta += sMuted.Render(" · of " + parentName)
-	head := wsLine + "\n" + tabBar
 	note := sMuted.Render("Read-only subagent transcript · ctrl+w or × closes this tab")
 	note += strings.Repeat("\n", max(0, m.input.Height()-1))
 	return lipgloss.NewStyle().Width(w).Height(h).MaxHeight(h).Render(
@@ -2678,7 +2757,7 @@ func (m Model) tabLayout(v *wsView, w int) (string, []tabSpan) {
 	}
 	line += newTab
 	// the focused agent's model and thinking level, right-aligned when there's room
-	if badge := m.modelBadge(); badge != "" {
+	if badge := m.modelBadge(); badge != "" && m.prefs.Tabs.Model {
 		if gap := w - lipgloss.Width(line) - lipgloss.Width(badge) - 1; gap >= 2 {
 			line += strings.Repeat(" ", gap) + badge
 		}
@@ -2732,7 +2811,7 @@ func (m *Model) closeTab(t tabItem) tea.Cmd {
 // clickTab handles mouse clicks on the tab bar (row 2 of the screen).
 func (m *Model) clickTab(msg tea.MouseMsg) (bool, tea.Cmd) {
 	v := m.wsViews[m.selWS]
-	if v == nil || msg.Y != 1 || msg.Action != tea.MouseActionPress {
+	if v == nil || msg.Y != m.headLines()-1 || msg.Action != tea.MouseActionPress {
 		return false, nil
 	}
 	x := msg.X - m.sidebarW()

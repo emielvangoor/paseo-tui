@@ -6,6 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Settings (`c`, also in the command center), in sections: what opens at start (the most recent agent,
+  the command center or the New workspace form), the header and what it shows (branch, pull request, diff), the model label
+  on the tab bar, workspace numbers, thinking and verbose tool output by default, scroll speed (wheel
+  and `J` / `K`), the keyboard hints at the bottom, asking before quitting, the terminal title, the
+  update check, and the editor (`e`) and file manager (`F`) commands. They are saved to
+  `<config dir>/paseo-tui/config.toml` (TOML, every setting described in a comment) on every change.
+  Editing that file applies it while paseo-tui runs; a broken file is reported and not applied.
+
 ## [0.8.0] - 2026-11-26
 
 ### Added

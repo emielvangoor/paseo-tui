@@ -261,3 +261,33 @@ func TestWideTableFits(t *testing.T) {
 		t.Errorf("table only %d of 59 columns wide:\n%s", widest, out)
 	}
 }
+
+// The settings file round-trips, missing keys keep their default, numbers and
+// choices out of range are put back, and an unknown key is reported.
+func TestConfigFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	c := defaultConfig()
+	c.Header.Diff, c.Startup.Open, c.Transcript.WheelLines, c.Tools.Editor = false, "command-center", 5, `emacs -nw "x"`
+	if err := saveConfig(path, c); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadConfig(path)
+	if err != nil || *got != *c {
+		t.Fatalf("round trip: %v\n got %+v\nwant %+v", err, got, c)
+	}
+	if err := os.WriteFile(path, []byte("[header]\nshow = false\n[transcript]\nwheel_lines = 999\n[startup]\nopen = \"nope\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err = loadConfig(path)
+	if err != nil || got.Header.Show || !got.Header.Diff || got.Transcript.WheelLines != 20 || got.Startup.Open != "recent" {
+		t.Fatalf("partial file: %v %+v", err, got)
+	}
+	_ = os.WriteFile(path, []byte("[header]\nshwo = true\n"), 0o644)
+	if _, err := loadConfig(path); err == nil || !strings.Contains(err.Error(), "unknown setting header.shwo") {
+		t.Fatalf("unknown key not reported: %v", err)
+	}
+	_ = os.WriteFile(path, []byte("[header\n"), 0o644)
+	if _, err := loadConfig(path); err == nil {
+		t.Fatal("broken file not reported")
+	}
+}

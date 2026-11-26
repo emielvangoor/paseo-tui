@@ -74,6 +74,7 @@ var helpSections = []helpSection{
 	}},
 	{"App", [][2]string{
 		{"? · q", "this help · quit (asks; q q quits)"},
+		{"c", "settings (saved to config.toml; edits there apply live)"},
 		{"ctrl+r", "reload / reconnect"},
 		{"S", "start the local daemon (when it's down)"},
 	}},

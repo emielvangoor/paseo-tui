@@ -107,6 +107,11 @@ func (m *Model) rebuildRows() {
 			}
 		}
 	}
+	if !m.prefs.Sidebar.Numbers {
+		for _, v := range m.wsViews {
+			v.num = 0
+		}
+	}
 
 	m.cursor = -1
 	for i, r := range m.rows {

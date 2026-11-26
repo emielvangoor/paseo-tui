@@ -42,7 +42,7 @@ type copiedMsg struct {
 
 // vpOrigin is the screen cell where the transcript viewport starts.
 func (m *Model) vpOrigin() (x, y int) {
-	return m.sidebarW(), 2 /*workspace line, tab bar*/
+	return m.sidebarW(), m.headLines() /*header, tab bar*/
 }
 
 // posAt maps a screen cell to a transcript position, clamped to the viewport.

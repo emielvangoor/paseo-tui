@@ -75,7 +75,19 @@ func firstInstalled(cmds ...string) []string {
 // filesManagers are the terminal file managers F looks for, in order.
 var filesManagers = []string{"ranger", "yazi", "lf", "nnn"}
 
-func paneCommand(kind paneKind) ([]string, error) {
+// paneCommand is the program for a pane: the one set in the settings, else the
+// first one installed.
+func paneCommand(kind paneKind, prefs *Config) ([]string, error) {
+	set := prefs.Tools.Editor
+	if kind == paneFiles {
+		set = prefs.Tools.FileManager
+	}
+	if strings.TrimSpace(set) != "" {
+		if argv := firstInstalled(set); argv != nil {
+			return argv, nil
+		}
+		return nil, fmt.Errorf("%s (from the settings) is not installed", strings.Fields(set)[0])
+	}
 	if kind == paneFiles {
 		if argv := firstInstalled(filesManagers...); argv != nil {
 			return argv, nil
@@ -204,8 +216,8 @@ func (m Model) paneOrigin() (x, y int) {
 // openPane shows this workspace's pane of this kind, starting its program in the
 // workspace's directory when it isn't running yet.
 func (m *Model) openPane(kind paneKind) (tea.Model, tea.Cmd) {
-	argv, err := paneCommand(kind)
-	if kind == paneFiles && err != nil {
+	argv, err := paneCommand(kind, m.prefs)
+	if kind == paneFiles && err != nil && strings.TrimSpace(m.prefs.Tools.FileManager) == "" {
 		// no terminal file manager: show the directory in Finder / Explorer / Files instead
 		mm, c := m.openInFiles()
 		mod := mm.(Model)
