@@ -239,6 +239,7 @@ type Renderer struct {
 	md       *glamour.TermRenderer
 	mdFit    []*glamour.TermRenderer // wrap to the width, widest first: tables get their cells wrapped to fit
 	style    gansi.StyleConfig
+	code     *codeStyles // syntax colours for code in tool calls
 	cache    map[*Entry]cached
 	ShowThk  bool
 	Verbose  bool
@@ -253,7 +254,7 @@ type cached struct {
 }
 
 func NewRenderer(dark bool) *Renderer {
-	return &Renderer{cache: map[*Entry]cached{}, darkMode: dark}
+	return &Renderer{cache: map[*Entry]cached{}, darkMode: dark, code: newCodeStyles(dark)}
 }
 
 func (r *Renderer) SetWidth(w int) {
@@ -446,15 +447,18 @@ func (r *Renderer) renderTool(t *ToolEntry) string {
 		}
 	case "read":
 		label, arg = "Read", d.FilePath
+		if r.Verbose && d.Content != "" {
+			body = r.code.codeBlock(d.Content, d.FilePath, 12)
+		}
 	case "write":
 		label, arg = "Write", d.FilePath
-		if r.Verbose {
-			body = headLines(d.Content, 12)
+		if r.Verbose && d.Content != "" {
+			body = r.code.codeBlock(d.Content, d.FilePath, 12)
 		}
 	case "edit":
 		label, arg = "Edit", d.FilePath
 		if r.Verbose {
-			body = colorDiff(headLines(d.UnifiedDiff, 30))
+			body = r.code.diffBlock(d.UnifiedDiff, d.OldString, d.NewString, d.FilePath, 30, r.width-6)
 		}
 	case "search":
 		label = "Search"
@@ -545,23 +549,6 @@ func rewrap(s string, width int) string {
 }
 
 var listMarker = regexp.MustCompile(`^(?:[•\-*]|\d+\.) `)
-
-func colorDiff(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, l := range lines {
-		switch {
-		case strings.HasPrefix(l, "+++") || strings.HasPrefix(l, "---"):
-			lines[i] = sMuted.Render(l)
-		case strings.HasPrefix(l, "+"):
-			lines[i] = sGreen.Render(l)
-		case strings.HasPrefix(l, "-"):
-			lines[i] = sRed.Render(l)
-		case strings.HasPrefix(l, "@@"):
-			lines[i] = sBlue.Render(l)
-		}
-	}
-	return strings.Join(lines, "\n")
-}
 
 func tailLines(s string, n int) string {
 	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")

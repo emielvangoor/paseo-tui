@@ -163,8 +163,8 @@ const histories = {
     ]),
     edit(
       "src/cart.js",
-      "@@ -12,6 +12,18 @@ export function addItem(cart, item) {\n" +
-        "   return cart;\n }\n+\n+export function applyDiscountCode(cart, code) {\n" +
+      "@@ -10,5 +10,17 @@\n export function addItem(cart, item) {\n-  cart.items.push(item);\n" +
+        "+  cart.items.push({ ...item, qty: item.qty ?? 1 });\n   return cart;\n }\n+\n+export function applyDiscountCode(cart, code) {\n" +
         "+  const m = /^SAVE(\\d{1,2})$/i.exec(code.trim());\n+  if (!m) throw new Error(`unknown code ${code}`);\n" +
         "+  cart.discount = { code: code.toUpperCase(), percent: Number(m[1]) };\n+  return cart;\n+}\n",
     ),

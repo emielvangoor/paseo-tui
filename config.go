@@ -119,7 +119,7 @@ func (c *Config) settings() []setting {
 		{section: "transcript", key: "thinking", label: "Show thinking", kind: setBool, b: &c.Transcript.Thinking,
 			help: "Show the agents' thinking. t switches it for now."},
 		{section: "transcript", key: "verbose", label: "Verbose tool output", kind: setBool, b: &c.Transcript.Verbose,
-			help: "Show command output and diffs under tool calls. v switches it for now."},
+			help: "Show command output, diffs and file contents under tool calls. v switches it for now."},
 		{section: "transcript", key: "wheel_lines", label: "Lines per wheel notch", kind: setInt, i: &c.Transcript.WheelLines, min: 1, max: 20,
 			help: "How far one notch of the mouse wheel (or a trackpad step) scrolls."},
 		{section: "transcript", key: "wheel_max", label: "Fastest wheel scrolling", kind: setInt, i: &c.Transcript.WheelMax, min: 1, max: 50,

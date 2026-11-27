@@ -10,7 +10,7 @@
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-555)
 ![Go](https://img.shields.io/github/go-mod/go-version/emielvangoor/paseo-tui)
 
-<img src="docs/demo.gif" alt="A tour of paseo-tui: an agent streaming its work, moving to a finished agent with the details panel, the command center jumping to an agent that asks two questions, answering them in one form, slash commands, and the settings panel" width="100%">
+<img src="docs/demo.gif" alt="A tour of paseo-tui: an agent streaming its work, moving to a finished agent with the details panel and its syntax-highlighted edit diff, the command center jumping to an agent that asks two questions, answering them in one form, slash commands, and the settings panel" width="100%">
 
 </div>
 
@@ -39,9 +39,11 @@ It works with your local Paseo daemon or any remote one, over SSH or the network
   AskUserQuestion) open as one form with every question: pick options or type your own answer.
 - **Slash commands and skills.** `/` lists the agent's commands and skills, as in the desktop.
   `/clear` starts a fresh agent with the same setup, `/exit` archives it.
-- **See what's happening.** Markdown transcripts with tables, collapsible thinking, tool calls with diffs
-  and output, a live progress line ("⠋ Running Bash: npm test · 1:24"), and a **details panel** with
+- **See what's happening.** Markdown transcripts with tables, collapsible thinking, tool calls with
+  output, a live progress line ("⠋ Running Bash: npm test · 1:24"), and a **details panel** with
   context-window use, tokens, cost and the agent's task list.
+- **Syntax-highlighted diffs.** With `v`, edits show as diffs with line numbers, tinted added and
+  removed lines, and colours for the file's language; files read or written are highlighted too.
 - **Subagents.** Claude Code tasks, Oh My Pi runs and delegated Paseo agents appear as a track under the
   conversation, and each can open as its own tab.
 - **Find anything.** `p` fuzzy-searches every workspace *and the agents inside them*, plus actions.
@@ -165,7 +167,7 @@ Press `?` inside the app for every shortcut.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshot-main.png" alt="A finished agent's transcript with a markdown table and task list, its tabs, and the details panel with context use, cost and tasks"><br><sub><b>Workspaces and agents</b>: transcript, tabs and the details panel (<code>d</code>)</sub></td>
+<td width="50%"><img src="docs/screenshot-main.png" alt="A finished agent's transcript with its task list, a syntax-highlighted edit diff with line numbers, its tabs, and the details panel with context use, cost and tasks"><br><sub><b>Workspaces and agents</b>: transcript with highlighted diffs (<code>v</code>), tabs and the details panel (<code>d</code>)</sub></td>
 <td width="50%"><img src="docs/screenshot-palette.png" alt="The command center searching workspaces"><br><sub><b>Command center</b> (<code>p</code>): fuzzy search across workspaces and their agents</sub></td>
 </tr>
 <tr>
@@ -240,7 +242,7 @@ message box: `esc` leaves it, `i` or `enter` goes back in.
 | `ctrl+d` / `ctrl+u` · `pgdn` / `pgup` | Scroll half a page · a page |
 | `g` / `G` | Top / bottom of the transcript (`G` follows new output) |
 | `t` | Show / hide thinking |
-| `v` | Verbose tool output: command output and diffs |
+| `v` | Verbose tool output: command output, and diffs and file contents with syntax highlighting |
 | `alt+j` / `alt+k` · `alt+↓` / `alt+↑` | Scroll the details panel |
 | `A` | Show archived agents |
 | `ctrl+r` · `S` | Reload / reconnect · start the local daemon |

@@ -8,15 +8,19 @@ Enter
 Sleep 3s
 Show
 
-# the main view: a finished agent with the details panel
+# the main view: a finished agent with the details panel and verbose tool output (v)
 Type "j"
 Sleep 300ms
 Type "j"
 Sleep 300ms
 Type "d"
+Sleep 300ms
+Type "v"
 Sleep 1s
 Screenshot "docs/screenshot-main.png"
 Sleep 500ms
+Type "v"
+Sleep 300ms
 
 # the command center, searching
 Type "p"

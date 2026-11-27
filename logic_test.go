@@ -318,3 +318,25 @@ func TestConfigFooterHintsMoved(t *testing.T) {
 		t.Fatalf("written back wrong:\n%s", b)
 	}
 }
+
+// An edit's diff keeps each line's own number and code: removed lines count
+// on the old side, added and unchanged ones on the new side, past a hunk break.
+func TestDiffBlockLines(t *testing.T) {
+	s := newCodeStyles(true)
+	diff := "--- a/x.go\n+++ b/x.go\n@@ -10,3 +10,3 @@\n func a() {\n-\treturn 1\n+\treturn 2\n }\n@@ -40,2 +40,3 @@\n x := \"a\n+y\"\n z()\n"
+	got := strings.Split(ansi.Strip(s.diffBlock(diff, "", "", "x.go", 30, 60)), "\n")
+	want := []string{"10   func a() {", "11 -     return 1", "11 +     return 2", "12   }", " ⋯", "40   x := \"a", "41 + y\"", "42   z()"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d lines:\n%s", len(got), strings.Join(got, "\n"))
+	}
+	for i := range want {
+		if strings.TrimRight(got[i], " ") != want[i] {
+			t.Errorf("line %d: %q, want %q", i, got[i], want[i])
+		}
+	}
+	// without a diff, the old and new text are shown as removed and added
+	got = strings.Split(ansi.Strip(s.diffBlock("", "a\n", "b\n", "x.txt", 30, 20)), "\n")
+	if len(got) != 2 || !strings.HasPrefix(got[0], "- a") || !strings.HasPrefix(got[1], "+ b") {
+		t.Errorf("old/new: %q", got)
+	}
+}

@@ -22,7 +22,13 @@ Sleep 700ms
 Type "j"
 Sleep 1.2s
 Type "d"
-Sleep 2.5s
+Sleep 2s
+
+# verbose tool output: the edit's diff, highlighted
+Type "v"
+Sleep 3s
+Type "v"
+Sleep 300ms
 Type "d"
 Sleep 600ms
 

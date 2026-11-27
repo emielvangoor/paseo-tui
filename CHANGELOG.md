@@ -6,6 +6,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Syntax highlighting for code in tool calls (`v`, verbose tool output): edit diffs get line numbers,
+  tinted backgrounds on added and removed lines, and colours for the file's language. Files read or
+  written show their first lines highlighted the same way. An edit that reports only the old and new
+  text, without a diff, is shown as one too.
+
 ## [0.9.1] - 2026-11-27
 
 ### Changed
