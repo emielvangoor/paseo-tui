@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
+	gansi "github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/glamour/styles"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -236,7 +237,8 @@ var (
 type Renderer struct {
 	width    int
 	md       *glamour.TermRenderer
-	mdFit    *glamour.TermRenderer // wraps to the width: tables get their cells wrapped to fit
+	mdFit    []*glamour.TermRenderer // wrap to the width, widest first: tables get their cells wrapped to fit
+	style    gansi.StyleConfig
 	cache    map[*Entry]cached
 	ShowThk  bool
 	Verbose  bool
@@ -266,16 +268,43 @@ func (r *Renderer) SetWidth(w int) {
 	// glamour pads inline code with spaces it doesn't count when wrapping,
 	// which strands single words on their own line; drop that padding.
 	style.Code.Prefix, style.Code.Suffix = "", ""
+	r.style = style
 	md, err := glamour.NewTermRenderer(glamour.WithStyles(style), glamour.WithWordWrap(0), glamour.WithEmoji())
 	if err == nil {
 		r.md = md
 	}
-	// glamour's wrap width counts the indent it draws on the left and a margin it keeps on the
-	// right; adding them back lets a table use the whole line, up to the 1 column rewrap keeps free
-	if fit, err := glamour.NewTermRenderer(glamour.WithStyles(style), glamour.WithWordWrap(max(20, w+3)), glamour.WithEmoji()); err == nil {
-		r.mdFit = fit
-	}
+	r.mdFit = nil // made when a table needs them
 	r.cache = map[*Entry]cached{}
+}
+
+// renderFit renders markdown with a table at the transcript's width. glamour's
+// wrap width counts the indent it draws on the left and a margin on the right,
+// and how close a table comes to the limit depends on its columns, so a few
+// widths are tried, widest first, until no line is wider than the transcript.
+func (r *Renderer) renderFit(txt string) (string, bool) {
+	limit := r.width - 1 // rewrap keeps one column free
+	for i, ww := range []int{limit + 4, limit + 2, limit, limit - 2} {
+		if i >= len(r.mdFit) {
+			fit, err := glamour.NewTermRenderer(glamour.WithStyles(r.style), glamour.WithWordWrap(max(20, ww)), glamour.WithEmoji())
+			if err != nil {
+				return "", false
+			}
+			r.mdFit = append(r.mdFit, fit)
+		}
+		out, err := r.mdFit[i].Render(txt)
+		if err != nil {
+			return "", false
+		}
+		out = trimPadding(strings.Trim(out, "\n"))
+		fits := true
+		for _, l := range strings.Split(out, "\n") {
+			fits = fits && ansi.StringWidth(l) <= limit
+		}
+		if fits {
+			return out, true
+		}
+	}
+	return "", false
 }
 
 func (r *Renderer) Reset() { r.cache = map[*Entry]cached{} }
@@ -331,8 +360,10 @@ func (r *Renderer) renderEntry(e *Entry) string {
 		}
 		if r.md != nil {
 			md := r.md
-			if r.mdFit != nil && mdTable.MatchString(txt) {
-				md = r.mdFit // unwrapped, a wide table's rows would be broken mid-row
+			if mdTable.MatchString(txt) { // unwrapped, a wide table's rows would be broken mid-row
+				if out, ok := r.renderFit(txt); ok {
+					return out
+				}
 			}
 			if out, err := md.Render(txt); err == nil {
 				return rewrap(trimPadding(strings.Trim(out, "\n")), r.width-1)

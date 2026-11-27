@@ -260,6 +260,15 @@ func TestWideTableFits(t *testing.T) {
 	if widest < 58 { // a table that has to wrap uses the whole line
 		t.Errorf("table only %d of 59 columns wide:\n%s", widest, out)
 	}
+	// at every width, no table line is wider than the transcript (it would be wrapped mid-row)
+	plan := "| Step | Change | File |\n|---|---|---|\n| 1 | `applyDiscountCode(cart, code)` parses `SAVE<n>` | `src/cart.js` |\n" +
+		"| 3 | Tests for valid, invalid and missing codes | `test/cart.test.js` |\n"
+	for w := 40; w <= 200; w++ {
+		r.SetWidth(w)
+		if _, ok := r.renderFit(plan); !ok {
+			t.Errorf("width %d: the table doesn't fit", w)
+		}
+	}
 }
 
 // The settings file round-trips, missing keys keep their default, numbers and

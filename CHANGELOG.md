@@ -14,6 +14,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   thinking, `u to open` under subagents, `G to follow`, and the action keys on the right of the bottom
   line (the question and permission boxes keep theirs).
 
+### Fixed
+
+- A markdown table that came out one column wider than the transcript at some widths had its rows
+  broken across lines, which also pushed the details panel out of line.
+
 ## [0.9.0] - 2026-11-26
 
 ### Added
