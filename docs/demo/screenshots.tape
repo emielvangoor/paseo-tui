@@ -72,6 +72,22 @@ Sleep 500ms
 Escape
 Sleep 300ms
 
+# plan usage
+Type "U"
+Sleep 1s
+Screenshot "docs/screenshot-usage.png"
+Sleep 500ms
+Escape
+Sleep 300ms
+
+# history
+Type "H"
+Sleep 1s
+Screenshot "docs/screenshot-history.png"
+Sleep 500ms
+Escape
+Sleep 300ms
+
 # New workspace
 Type "N"
 Sleep 800ms

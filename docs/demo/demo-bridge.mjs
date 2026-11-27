@@ -291,6 +291,30 @@ function handle(req) {
       return null;
     case "models":
       return { models: models[req.provider] ?? [] };
+    case "usage": {
+      const at = (h) => new Date(Date.now() + h * 3600e3).toISOString();
+      const now = new Date().toISOString();
+      const entry = (id, sourceLabel, account, report) => ({ id, sourceId: id, sourceLabel, account: { label: account }, fetchedAt: now, report });
+      return [
+        entry("claude", "Claude", "dev@acme.test", {
+          status: "available", planLabel: "Max 5x", windows: [
+            { id: "five_hour", label: "Session", usedPct: 31, resetsAt: at(2.3) },
+            { id: "weekly", label: "Weekly", usedPct: 74, resetsAt: at(51), tone: "warning" },
+            { id: "weekly_opus", label: "Weekly · Opus", usedPct: 18, resetsAt: at(51) },
+          ], details: [{ id: "extra_usage", label: "Extra usage", value: "Disabled" }],
+        }),
+        entry("codex", "Codex", "dev@acme.test", {
+          status: "available", planLabel: "Plus", windows: [
+            { id: "five_hour", label: "Session", usedPct: 8, resetsAt: at(4.1), tone: "ok" },
+            { id: "weekly", label: "Weekly", usedPct: 95, resetsAt: at(30), tone: "danger", runsOutAt: at(7) },
+          ], balances: [{ id: "credits", label: "Credits", remaining: 120, unit: "credits" }],
+        }),
+        entry("opencode", "OpenCode Zen", "", {
+          status: "available", windows: [], balances: [{ id: "balance", label: "Balance", used: 7.6, limit: 20, unit: "usd" }],
+        }),
+        entry("copilot", "Copilot", "dev@acme.test", { status: "unavailable", problem: { kind: "expired", expiresAt: at(-50), refreshedBy: "gh auth login" } }),
+      ];
+    }
     case "providers":
       return [
         { provider: "claude", label: "Claude", status: "available", enabled: "Enabled", defaultMode: "default" },

@@ -48,6 +48,8 @@ It works with your local Paseo daemon or any remote one, over SSH or the network
   conversation, and each can open as its own tab.
 - **Find anything.** `p` fuzzy-searches every workspace *and the agents inside them*, plus actions.
   `H` opens **History**: every agent, archived ones too, restored with their worktree when you open one.
+- **Plan usage.** `U` shows every provider account's limits as the desktop does: session and weekly
+  windows with countdowns to their reset, a warning when the pace runs out early, credits and balances.
 - **Peek at the code.** `e` opens the workspace in your editor, `F` in your file manager (ranger, yazi,
   lf or nnn), in a pane floating over the UI while agents keep streaming behind it.
 - **Make it yours.** `c` opens the settings: what to show on start, the header, model labels, workspace
@@ -178,6 +180,10 @@ Press `?` inside the app for every shortcut.
 <td width="50%"><img src="docs/screenshot-slash.png" alt="The slash command list above the message box, with commands and skills"><br><sub><b>Slash commands</b> (<code>/</code>): the agent's commands and skills</sub></td>
 <td width="50%"><img src="docs/screenshot-settings.png" alt="The settings panel with sections for general, startup, header, tabs, sidebar and transcript"><br><sub><b>Settings</b> (<code>c</code>): saved to <code>config.toml</code> as you change them</sub></td>
 </tr>
+<tr>
+<td width="50%"><img src="docs/screenshot-usage.png" alt="Plan usage: Claude and Codex accounts with session and weekly bars, reset countdowns, credits, a balance and an expired login"><br><sub><b>Plan usage</b> (<code>U</code>): limits, resets and credits of every account</sub></td>
+<td width="50%"><img src="docs/screenshot-history.png" alt="History listing every agent with its project, workspace and provider"><br><sub><b>History</b> (<code>H</code>): every agent, archived ones too</sub></td>
+</tr>
 </table>
 
 The screenshots and the GIF show made-up demo data; `make screenshots` and `make demo` record them with
@@ -227,6 +233,7 @@ message box: `esc` leaves it, `i` or `enter` goes back in.
 | `a` | Archive the agent or the workspace, delete the agent, or remove a project (always confirms) |
 | `delete` | Delete the agent permanently (asks; `fn+delete` on a Mac keyboard) |
 | `H` | History, like the desktop's: every agent including archived ones, searchable; `enter` opens one, and restores it first (with its workspace or worktree) when archived |
+| `U` | Plan usage, like the desktop's: each provider account's session and weekly limits, when they reset and whether the pace runs out first, credits and balances (`r` refreshes) |
 | `c` | Settings: start-up view, header (branch, PR, diff), model label, workspace numbers, thinking and tool output, scroll speed, keyboard hints, quit confirmation, terminal title, update check, editor and file manager. Saved to `config.toml` on every change |
 | `e` | Open the workspace in your editor in a floating pane: `$VISUAL`, `$EDITOR`, else nvim or vim (`ctrl+\` hides it, `e` brings it back, quitting the editor closes it). GUI editors need their terminal mode, e.g. `VISUAL="emacs -nw"` |
 | `F` | Browse the workspace's files in a floating pane with ranger, yazi, lf or nnn (the first one installed; `ctrl+\` hides it, `F` brings it back). Without one, opens the directory in Finder, Explorer or the Linux file manager |

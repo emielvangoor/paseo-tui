@@ -340,3 +340,38 @@ func TestDiffBlockLines(t *testing.T) {
 		t.Errorf("old/new: %q", got)
 	}
 }
+
+// Plan usage reads like the desktop's: countdowns in two units, balances
+// against their limit, and a warning when the pace so far runs out early.
+func TestUsageText(t *testing.T) {
+	now := time.Date(2026, 11, 27, 12, 0, 0, 0, time.UTC)
+	iso := func(d time.Duration) string { return now.Add(d).Format(time.RFC3339) }
+	for d, want := range map[time.Duration]string{
+		50*time.Hour + 30*time.Minute: "resets in 2d 2h", 24 * time.Hour: "resets in 24h",
+		4*time.Hour + 59*time.Minute + 30*time.Second: "resets in 4h 59m", 37 * time.Minute: "resets in 37m", -time.Minute: "resetting now",
+	} {
+		if got := resetPhrase(iso(d), now); got != want {
+			t.Errorf("%v: %q, want %q", d, got, want)
+		}
+	}
+	f := func(v float64) *float64 { return &v }
+	if got := balanceText(UsageBalance{Remaining: f(5), Limit: f(20), Unit: "usd"}); got != "$15.00 / $20.00" {
+		t.Errorf("balance %q", got)
+	}
+	if got := balanceText(UsageBalance{Remaining: f(120), Unit: "credits"}); got != "120 left" {
+		t.Errorf("balance %q", got)
+	}
+	// a week-long window half used after one day runs out in two more days
+	week := UsageWindow{UsedPct: f(50), ResetsAt: iso(6 * 24 * time.Hour), DurationSeconds: 7 * 24 * 3600}
+	if got := usagePace(week, iso(0), now); got != "runs out "+now.Add(24*time.Hour).Local().Format("Mon 15:04") {
+		t.Errorf("pace %q", got)
+	}
+	week.UsedPct = f(10) // on track
+	if got := usagePace(week, iso(0), now); got != "" {
+		t.Errorf("pace %q", got)
+	}
+	week.UsedPct = f(100)
+	if got := usagePace(week, iso(0), now); got != "limit reached" {
+		t.Errorf("pace %q", got)
+	}
+}

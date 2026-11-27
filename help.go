@@ -26,6 +26,7 @@ var helpSections = []helpSection{
 		{"space · z", "toggle a project · collapse all others"},
 		{"o", "group the sidebar by project / by status"},
 		{"H", "history: all agents, archived ones too; enter restores"},
+		{"U", "plan usage: limits and credits per account; r refreshes"},
 	}},
 	{"Tabs", [][2]string{
 		{"[ / ] · tab", "previous / next agent tab"},

@@ -44,6 +44,7 @@ const (
 	ovPane
 	ovQuestion
 	ovHistory
+	ovUsage
 	ovPrefs
 )
 
@@ -162,6 +163,7 @@ type Model struct {
 	question       *questionForm        // the open answer form of an agent's question
 	askPlans       map[string]*askPlan  // agent -> an Oh My Pi question being answered round by round
 	history        *historyList         // History (H): all agents, archived ones included
+	usage          *usagePanel          // Plan usage (U), kept between openings
 	paneShown      paneID               // which one ovPane shows
 	pendingNewForm *NewAgentForm        // New workspace form waiting for "+ Add project…" to finish
 	detailsScroll  int                  // scroll offset of the details panel
@@ -1087,6 +1089,10 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case usageMsg:
+		m.gotUsage(msg)
+		return m, nil
+
 	case historySearchMsg:
 		if h := m.history; h != nil && msg.gen == h.gen {
 			h.loading = true
@@ -1388,6 +1394,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.questionKey(k)
 	case ovHistory:
 		return m, m.historyKey(k)
+	case ovUsage:
+		return m, m.usageKey(k)
 	case ovPrefs:
 		return m, m.prefsKey(k)
 	case ovSubs:
@@ -1733,6 +1741,8 @@ func (m Model) handleKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.openRename()
 	case "H":
 		return m.openHistory()
+	case "U":
+		return m.openUsage()
 	case "c":
 		return m.openPrefs()
 	case "e":
@@ -2328,6 +2338,8 @@ func (m Model) View() string {
 		return m.centerOver(screen, m.projectFormView())
 	case ovRename:
 		return m.centerOver(screen, m.renameView())
+	case ovUsage:
+		return m.centerOver(screen, m.usageView())
 	case ovPane:
 		return m.centerOver(screen, m.paneView())
 	case ovQuestion:

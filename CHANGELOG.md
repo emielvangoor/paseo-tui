@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Plan usage** (`U`, also in the command center), like the desktop's: every provider account the host
+  knows, with its session and weekly windows, how much is used, when each resets, a warning when the
+  pace so far runs out before the reset, credits, balances and details. An expired or rejected login says
+  how to sign in again and shows the last reading. `r` asks the providers again instead of the host's
+  cache.
+
 ### Changed
 
 - With **Keyboard hints** off, the bottom bar is gone too, giving the transcript one more line.

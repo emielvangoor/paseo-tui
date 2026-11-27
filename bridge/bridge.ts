@@ -433,6 +433,11 @@ async function handle(req: Json): Promise<unknown> {
         defaultMode: e.defaultModeId ?? "default",
       }));
     }
+    case "usage": {
+      // account quotas and balances, as the desktop's Usage panel; older hosts serve a cached list
+      const { reports } = await need().listUsageReports({ forceRefresh: Boolean(req.refresh) || undefined });
+      return reports.map(({ icon: _icon, ...r }) => r); // the SVG icons are for the desktop
+    }
     case "run": {
       // same code path as `paseo run --no-wait`, including workspace/worktree setup
       const result = await runRunCommand(
