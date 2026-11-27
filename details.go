@@ -244,7 +244,7 @@ func (m *Model) scrollDetails(n int) {
 	m.detailsScroll = max(0, m.detailsScroll+n)
 	// keep the offset from running far past the end, so scrolling back responds at once
 	if lines := m.detailsLineCount(); lines > 0 {
-		m.detailsScroll = min(m.detailsScroll, max(0, lines-(m.height-1)))
+		m.detailsScroll = min(m.detailsScroll, max(0, lines-m.bodyH()))
 	}
 }
 

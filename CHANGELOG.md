@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- With **Keyboard hints** off, the bottom bar is gone too, giving the transcript one more line.
+  Messages, the connection state and an available update show on the message box's bottom border
+  instead.
+
 ## [0.10.0] - 2026-11-27
 
 ### Added

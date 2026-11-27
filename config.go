@@ -100,7 +100,7 @@ var sectionTitles = map[string]string{
 func (c *Config) settings() []setting {
 	return []setting{
 		{section: "general", key: "keyboard_hints", label: "Keyboard hints", kind: setBool, b: &c.General.KeyboardHints,
-			help: "Shortcut hints everywhere: the bottom line, + new on the tab bar, \"t to show\", \"u to open\", \"G to follow\". The bottom line stays for messages."},
+			help: "Shortcut hints everywhere: the bottom bar, + new on the tab bar, \"t to show\", \"u to open\", \"G to follow\". Off hides the bottom bar; messages show on the message box border."},
 		{section: "startup", key: "open", label: "On start, open", kind: setChoice, s: &c.Startup.Open,
 			choices: [][2]string{{"recent", "the most recent agent"}, {"command-center", "the command center"}, {"new", "a new workspace"}},
 			help:    "What paseo-tui shows when it starts: the agent you used last, the command center to pick one, or the New workspace form (N)."},

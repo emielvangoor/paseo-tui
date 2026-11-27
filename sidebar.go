@@ -228,7 +228,7 @@ func (m Model) viewSidebar(h int) string {
 
 // rowAtY maps a screen row inside the sidebar to a sidebar row index.
 func (m Model) rowAtY(y int) int {
-	h := m.height - 1
+	h := m.bodyH()
 	head := m.sidebarHead()
 	line := y - len(head)
 	if line < 0 {

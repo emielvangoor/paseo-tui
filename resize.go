@@ -94,7 +94,7 @@ func (m *Model) dragDivider(msg tea.MouseMsg) bool {
 		rightDiv = m.sidebarW() + m.mainW()
 	}
 	switch {
-	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y < m.height-1:
+	case msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.Y < m.bodyH():
 		switch {
 		case leftDiv >= 0 && abs(msg.X-leftDiv) <= 0:
 			m.drag = dragSidebar

@@ -841,7 +841,7 @@ func (m *Model) setCollapsed(project string, v bool) {
 func (m *Model) layout() {
 	rightW := m.mainW()
 	m.input.SetWidth(rightW - 4) // inside the composer's border and padding
-	vpH := m.height - 1 /*footer*/ - m.headLines() /*header, tabs*/ - 1 /*status*/ - 2 /*box border*/ - m.input.Height() - m.permHeight() - m.attachHeight()
+	vpH := m.bodyH() - m.headLines() /*header, tabs*/ - 1 /*status*/ - 2 /*box border*/ - m.input.Height() - m.permHeight() - m.attachHeight()
 	m.vp.Width = rightW - 1
 	m.vp.Height = max(3, vpH)
 	m.render.SetWidth(rightW - 2)
@@ -2284,8 +2284,7 @@ func (m Model) View() string {
 	if m.width == 0 {
 		return ""
 	}
-	footer := m.viewFooter()
-	bodyH := m.height - 1
+	bodyH := m.bodyH()
 
 	main := m.viewMain(bodyH)
 	if m.detailsW() > 0 {
@@ -2298,7 +2297,14 @@ func (m Model) View() string {
 		sep := lipgloss.NewStyle().Foreground(m.dividerColor(dragSidebar)).Render(strings.Repeat("│\n", bodyH-1) + "│")
 		body = lipgloss.JoinHorizontal(lipgloss.Top, side, sep, main)
 	}
-	screen := lipgloss.JoinVertical(lipgloss.Left, body, footer)
+	screen := body
+	if bodyH < m.height {
+		screen = lipgloss.JoinVertical(lipgloss.Left, body, m.viewFooter())
+	} else if note := m.footerNotice(); note != "" {
+		// no footer line: messages sit on the bottom row, over the message box's border
+		note = truncate(note+" ", max(10, m.mainW()-4))
+		screen = floatOver(screen, note, m.sidebarW()+2, m.height-1)
+	}
 
 	switch m.overlay {
 	case ovHelp:
@@ -2344,31 +2350,48 @@ func (m Model) centerOver(screen, box string) string {
 	return floatOver(screen, box, max(0, (m.width-bw)/2), max(0, (m.height-len(lines))/2))
 }
 
-func (m Model) viewFooter() string {
-	keys := "p find · n new · f fork · [ ] tabs · m model · d details · enter message · ? help"
-	if m.focus == focusInput {
-		keys = "enter send · alt+enter newline · ↑↓ history · ctrl+v image · esc done"
-	}
-	left := ""
+// bodyH: the rows above the footer. The footer line goes away with the keyboard hints.
+func (m Model) bodyH() int {
 	if m.prefs.General.KeyboardHints {
-		left = sMuted.Render(" " + keys)
+		return m.height - 1
 	}
-	switch {
-	case m.down:
-		left = sRed.Render(" ● daemon unreachable") + sMuted.Render(" · "+m.hostKey+" · r retry")
-	case m.loaded && (!m.connected || (m.connState != "" && m.connState != "connected")):
-		left = sYellow.Render(" ● "+orDefault(m.connState, "connecting")+"…") + sMuted.Render(" · "+m.hostKey)
-	}
+	return m.height
+}
+
+// footerNotice: what must be seen even without the footer line: the connection
+// state, the latest message (for 8 seconds), or an available update.
+func (m Model) footerNotice() string {
 	if m.status != "" && time.Since(m.statusT) < 8*time.Second {
 		st := sGreen
 		if m.isErr {
 			st = sRed
 		}
-		left = st.Render(" " + m.status)
+		return st.Render(" " + m.status)
+	}
+	switch {
+	case m.down:
+		return sRed.Render(" ● daemon unreachable") + sMuted.Render(" · "+m.hostKey+" · r retry")
+	case m.loaded && (!m.connected || (m.connState != "" && m.connState != "connected")):
+		return sYellow.Render(" ● "+orDefault(m.connState, "connecting")+"…") + sMuted.Render(" · "+m.hostKey)
+	}
+	if !m.prefs.General.KeyboardHints && m.updateAvail != "" {
+		return sBlue.Render(" ↑ "+m.updateAvail+" available") + sMuted.Render(" · "+m.updateHint)
+	}
+	return ""
+}
+
+func (m Model) viewFooter() string {
+	keys := "p find · n new · f fork · [ ] tabs · m model · d details · enter message · ? help"
+	if m.focus == focusInput {
+		keys = "enter send · alt+enter newline · ↑↓ history · ctrl+v image · esc done"
+	}
+	left := m.footerNotice()
+	if left == "" {
+		left = sMuted.Render(" " + keys)
 	}
 	// the one action that matters right now, on the right
 	right := ""
-	if a := m.current(); a != nil && m.selSub == nil && m.prefs.General.KeyboardHints {
+	if a := m.current(); a != nil && m.selSub == nil {
 		switch {
 		case len(m.perms[a.ID]) > 0:
 			right = sGreen.Render("enter review") + sMuted.Render(" · ") + sRed.Render("x deny")
@@ -2850,15 +2873,15 @@ type openNewMsg struct{}
 
 // clickSidebar: click a workspace to open it, a project/status header to fold it; wheel scrolls.
 func (m *Model) clickSidebar(msg tea.MouseMsg) (bool, tea.Cmd) {
-	if m.state.HideSidebar || msg.X >= m.sideWidth() || msg.Y < 0 || msg.Y >= m.height-1 {
+	if m.state.HideSidebar || msg.X >= m.sideWidth() || msg.Y < 0 || msg.Y >= m.bodyH() {
 		return false, nil
 	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
-		m.sideScroll = max(0, m.sidebarStart(m.height-1-len(m.sidebarHead()))-1)
+		m.sideScroll = max(0, m.sidebarStart(m.bodyH()-len(m.sidebarHead()))-1)
 		return true, nil
 	case tea.MouseButtonWheelDown:
-		m.sideScroll = min(m.sidebarStart(m.height-1-len(m.sidebarHead()))+1, max(0, len(m.rows)-1))
+		m.sideScroll = min(m.sidebarStart(m.bodyH()-len(m.sidebarHead()))+1, max(0, len(m.rows)-1))
 		return true, nil
 	case tea.MouseButtonLeft:
 		if msg.Action != tea.MouseActionPress {
@@ -2896,8 +2919,8 @@ func (m *Model) clickMain(msg tea.MouseMsg) (bool, tea.Cmd) {
 	if a == nil || m.selSub != nil {
 		return false, nil
 	}
-	boxTop := m.height - 1 /*footer*/ - 2 - m.input.Height()
-	if msg.Y >= boxTop && msg.Y < m.height-1 {
+	boxTop := m.bodyH() - 2 - m.input.Height()
+	if msg.Y >= boxTop && msg.Y < m.bodyH() {
 		m.sel = selection{}
 		m.focus = focusInput
 		return true, m.input.Focus()
