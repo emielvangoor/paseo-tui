@@ -291,3 +291,21 @@ func TestConfigFile(t *testing.T) {
 		t.Fatal("broken file not reported")
 	}
 }
+
+// 0.9.0 kept the hints switch under [footer]; such a file still loads, into
+// general.keyboard_hints, and is written back under [general] only.
+func TestConfigFooterHintsMoved(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	_ = os.WriteFile(path, []byte("[footer]\nhints = false\n"), 0o644)
+	c, err := loadConfig(path)
+	if err != nil || c.General.KeyboardHints {
+		t.Fatalf("old [footer] hints not read: %v %+v", err, c.General)
+	}
+	if err := saveConfig(path, c); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if strings.Contains(string(b), "[footer]") || !strings.Contains(string(b), "keyboard_hints = false") {
+		t.Fatalf("written back wrong:\n%s", b)
+	}
+}

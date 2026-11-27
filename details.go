@@ -166,9 +166,13 @@ func (m Model) viewDetailsLines() []string {
 		for _, e := range subs[:min(6, len(subs))] {
 			b = append(b, m.bucketIcon(e.bucket(), "")+" "+truncate(e.label(), inner-2))
 		}
+		hint := " · u to open"
+		if !m.prefs.General.KeyboardHints {
+			hint = ""
+		}
 		if len(subs) > 6 {
-			b = append(b, sMuted.Render(fmt.Sprintf("+%d more · u to open", len(subs)-6)))
-		} else {
+			b = append(b, sMuted.Render(fmt.Sprintf("+%d more", len(subs)-6)+hint))
+		} else if hint != "" {
 			b = append(b, sMuted.Render("u to open"))
 		}
 	}

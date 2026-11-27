@@ -6,6 +6,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- The **Keyboard hints** setting moved to a new **General** section (`[general] keyboard_hints` in
+  `config.toml`; a file from 0.9.0 with `[footer] hints` still works and is rewritten). Off now hides
+  every shortcut hint, not only the bottom line: `+ new ctrl+n` on the tab bar, `t to show` on folded
+  thinking, `u to open` under subagents, `G to follow`, and the action keys on the right of the bottom
+  line (the question and permission boxes keep theirs).
+
 ## [0.9.0] - 2026-11-26
 
 ### Added

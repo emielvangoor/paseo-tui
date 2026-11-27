@@ -240,6 +240,7 @@ type Renderer struct {
 	cache    map[*Entry]cached
 	ShowThk  bool
 	Verbose  bool
+	Hints    bool // keyboard hints, e.g. "t to show"
 	darkMode bool
 }
 
@@ -344,7 +345,11 @@ func (r *Renderer) renderEntry(e *Entry) string {
 			return ""
 		}
 		if !r.ShowThk {
-			return sItalic.Render("  ∴ thinking… ") + sMuted.Render(fmt.Sprintf("(%d chars, t to show)", len(txt)))
+			hint := ""
+			if r.Hints {
+				hint = ", t to show"
+			}
+			return sItalic.Render("  ∴ thinking… ") + sMuted.Render(fmt.Sprintf("(%d chars%s)", len(txt), hint))
 		}
 		return sItalic.Width(max(10, r.width-2)).PaddingLeft(2).Render("∴ " + txt)
 	case "tool":

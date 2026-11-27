@@ -299,7 +299,9 @@ func (m Model) trackLine(entries []subagentEntry, w int) string {
 	} else {
 		line += sMuted.Render(total)
 	}
-	line += sMuted.Render("  ·  u to open")
+	if m.prefs.General.KeyboardHints {
+		line += sMuted.Render("  ·  u to open")
+	}
 	return truncate(line, w)
 }
 

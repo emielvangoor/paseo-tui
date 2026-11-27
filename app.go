@@ -207,7 +207,7 @@ func NewModel(cfg BridgeConfig) Model {
 		_ = saveConfig(configPath(), prefs) // a file to find and edit, with every setting described
 	}
 	render := NewRenderer(lipgloss.HasDarkBackground())
-	render.ShowThk, render.Verbose = prefs.Transcript.Thinking, prefs.Transcript.Verbose
+	render.ShowThk, render.Verbose, render.Hints = prefs.Transcript.Thinking, prefs.Transcript.Verbose, prefs.General.KeyboardHints
 	return Model{
 		cfg:        cfg,
 		hostKey:    cfg.HostLabel,
@@ -2350,7 +2350,7 @@ func (m Model) viewFooter() string {
 		keys = "enter send · alt+enter newline · ↑↓ history · ctrl+v image · esc done"
 	}
 	left := ""
-	if m.prefs.Footer.Hints {
+	if m.prefs.General.KeyboardHints {
 		left = sMuted.Render(" " + keys)
 	}
 	switch {
@@ -2368,7 +2368,7 @@ func (m Model) viewFooter() string {
 	}
 	// the one action that matters right now, on the right
 	right := ""
-	if a := m.current(); a != nil && m.selSub == nil {
+	if a := m.current(); a != nil && m.selSub == nil && m.prefs.General.KeyboardHints {
 		switch {
 		case len(m.perms[a.ID]) > 0:
 			right = sGreen.Render("enter review") + sMuted.Render(" · ") + sRed.Render("x deny")
@@ -2508,7 +2508,11 @@ func (m Model) composerStatus(a Agent, w int) string {
 	}
 	var right []string
 	if !m.vp.AtBottom() {
-		right = append(right, sMuted.Render(fmt.Sprintf("↓ %d%%  G to follow", int(m.vp.ScrollPercent()*100))))
+		pos := fmt.Sprintf("↓ %d%%", int(m.vp.ScrollPercent()*100))
+		if m.prefs.General.KeyboardHints {
+			pos += "  G to follow"
+		}
+		right = append(right, sMuted.Render(pos))
 	}
 	if subs := m.subagentsOf(a.ID); len(subs) > 0 {
 		right = append(right, m.subagentSummary(subs))
@@ -2647,6 +2651,9 @@ func (m Model) viewTabs(v *wsView, w int) string {
 func (m Model) tabLayout(v *wsView, w int) (string, []tabSpan) {
 	items := m.tabsOf(v.ws.ID)
 	if len(items) == 0 {
+		if !m.prefs.General.KeyboardHints {
+			return sMuted.Render(" no tabs"), nil
+		}
 		return sMuted.Render(" no tabs ") + sMuted.Foreground(cBorder).Render("─ ") + sMuted.Render("+ new ") +
 			sMuted.Foreground(cBorder).Render("ctrl+n"), nil
 	}
@@ -2720,6 +2727,9 @@ func (m Model) tabLayout(v *wsView, w int) (string, []tabSpan) {
 	newTab := sMuted.Render(" + new ") + sMuted.Foreground(cBorder).Render("ctrl+n")
 	if tabs[selIdx].closeAt >= 0 {
 		newTab = sMuted.Render(" + new ") + sMuted.Foreground(cBorder).Render("ctrl+n · ctrl+w close")
+	}
+	if !m.prefs.General.KeyboardHints {
+		newTab = ""
 	}
 	budget := w - 3 - lipgloss.Width(newTab)
 

@@ -18,6 +18,9 @@ import (
 // the app runs (it is checked every second).
 
 type Config struct {
+	General struct {
+		KeyboardHints bool `toml:"keyboard_hints"`
+	} `toml:"general"`
 	Startup struct {
 		Open string `toml:"open"` // recent | command-center | new
 	} `toml:"startup"`
@@ -40,8 +43,9 @@ type Config struct {
 		WheelMax   int  `toml:"wheel_max"`
 		KeyLines   int  `toml:"key_lines"`
 	} `toml:"transcript"`
+	// COMPAT: 0.9.0 had [footer] hints; it's read into general.keyboard_hints and not written back.
 	Footer struct {
-		Hints bool `toml:"hints"`
+		Hints *bool `toml:"hints"`
 	} `toml:"footer"`
 	Behavior struct {
 		ConfirmQuit   bool `toml:"confirm_quit"`
@@ -61,7 +65,7 @@ func defaultConfig() *Config {
 	c.Tabs.Model = true
 	c.Sidebar.Numbers = true
 	c.Transcript.WheelLines, c.Transcript.WheelMax, c.Transcript.KeyLines = 2, 8, 3
-	c.Footer.Hints = true
+	c.General.KeyboardHints = true
 	c.Behavior.ConfirmQuit, c.Behavior.TerminalTitle, c.Behavior.UpdateCheck = true, true, true
 	return c
 }
@@ -89,12 +93,14 @@ type setting struct {
 }
 
 var sectionTitles = map[string]string{
-	"startup": "Startup", "header": "Header", "tabs": "Tabs", "sidebar": "Sidebar", "transcript": "Transcript",
-	"footer": "Footer", "behavior": "Behavior", "tools": "Tools",
+	"general": "General", "startup": "Startup", "header": "Header", "tabs": "Tabs", "sidebar": "Sidebar",
+	"transcript": "Transcript", "behavior": "Behavior", "tools": "Tools",
 }
 
 func (c *Config) settings() []setting {
 	return []setting{
+		{section: "general", key: "keyboard_hints", label: "Keyboard hints", kind: setBool, b: &c.General.KeyboardHints,
+			help: "Shortcut hints everywhere: the bottom line, + new on the tab bar, \"t to show\", \"u to open\", \"G to follow\". The bottom line stays for messages."},
 		{section: "startup", key: "open", label: "On start, open", kind: setChoice, s: &c.Startup.Open,
 			choices: [][2]string{{"recent", "the most recent agent"}, {"command-center", "the command center"}, {"new", "a new workspace"}},
 			help:    "What paseo-tui shows when it starts: the agent you used last, the command center to pick one, or the New workspace form (N)."},
@@ -120,8 +126,6 @@ func (c *Config) settings() []setting {
 			help: "The most lines one wheel step scrolls while you keep spinning."},
 		{section: "transcript", key: "key_lines", label: "Lines per J / K", kind: setInt, i: &c.Transcript.KeyLines, min: 1, max: 30,
 			help: "How far J and K scroll the transcript."},
-		{section: "footer", key: "hints", label: "Keyboard hints", kind: setBool, b: &c.Footer.Hints,
-			help: "The shortcut hints at the bottom. The line stays for messages and the connection state."},
 		{section: "behavior", key: "confirm_quit", label: "Ask before quitting", kind: setBool, b: &c.Behavior.ConfirmQuit,
 			help: "q and ctrl+c ask first. Open editor or file manager panes are always asked about."},
 		{section: "behavior", key: "terminal_title", label: "Set the terminal title", kind: setBool, b: &c.Behavior.TerminalTitle,
@@ -193,6 +197,9 @@ func loadConfig(path string) (*Config, error) {
 	md, err := toml.Decode(string(b), c)
 	if err != nil {
 		return defaultConfig(), fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	if h := c.Footer.Hints; h != nil {
+		c.General.KeyboardHints, c.Footer.Hints = *h, nil
 	}
 	c.clamp()
 	if u := md.Undecoded(); len(u) > 0 {
@@ -323,6 +330,10 @@ func (m *Model) setConfig(c *Config) {
 	}
 	if old == nil || old.Transcript.Verbose != c.Transcript.Verbose {
 		m.render.Verbose = c.Transcript.Verbose
+	}
+	if m.render.Hints != c.General.KeyboardHints {
+		m.render.Hints = c.General.KeyboardHints
+		m.render.Reset() // cached "thinking… (N chars, t to show)" lines
 	}
 	m.rebuildRows()
 	m.layout()
