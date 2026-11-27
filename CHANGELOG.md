@@ -6,6 +6,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Fixed
+
+- The keyboard help (`?`) lists the shortcuts it was missing: `space` and `enter` fold a project,
+  `shift+tab`, `ctrl+b` and `ctrl+c`, the message box's `tab`, `backspace` (removes the last image),
+  `/clear` and `/exit`, `esc` to clear a selection, and a Mouse section.
+
 ## [0.11.0] - 2026-11-27
 
 ### Added
