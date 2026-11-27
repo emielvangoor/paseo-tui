@@ -13,6 +13,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   every shortcut hint, not only the bottom line: `+ new ctrl+n` on the tab bar, `t to show` on folded
   thinking, `u to open` under subagents, `G to follow`, and the action keys on the right of the bottom
   line (the question and permission boxes keep theirs).
+- The README opens with an animated tour and shows more screenshots: questions, slash commands and
+  settings. They're recorded from made-up demo data with `make screenshots` and `make demo` (needs
+  [vhs](https://github.com/charmbracelet/vhs)).
 
 ### Fixed
 

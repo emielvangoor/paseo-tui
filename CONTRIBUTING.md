@@ -54,7 +54,10 @@ make test     # unit tests
 - Keep pull requests focused: one change, with a clear description of the why.
 - Add or update tests for logic you touch (`logic_test.go` shows the style).
 - Update `CHANGELOG.md` under **Unreleased**.
-- For UI changes, include a screenshot or a short recording in the PR.
+- For UI changes, include a screenshot or a short recording in the PR. The README's screenshots and GIF
+  come from `docs/demo/`: a fake bridge with made-up projects (`demo-bridge.mjs`, run with
+  `./paseo-tui -bridge docs/demo/demo-bridge.mjs`) and [vhs](https://github.com/charmbracelet/vhs) tapes.
+  `make screenshots` and `make demo` re-record them.
 
 ## Releasing (maintainers)
 

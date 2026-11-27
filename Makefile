@@ -15,7 +15,7 @@ PLATFORMS := darwin/arm64 darwin/amd64 linux/amd64 linux/arm64 windows/amd64 win
 
 export PASEO_REF PASEO_COMMIT
 
-.PHONY: all build bridge run test vet fmt fmt-check lint cross release clean distclean help
+.PHONY: all build bridge run test vet fmt fmt-check lint cross release screenshots demo clean distclean help
 
 all: build ## Build the bridge and the binary (default)
 
@@ -74,6 +74,13 @@ release: bridge ## Cross-compile release archives, Linux packages and checksums 
 	done; done
 	@cd $(DIST) && (sha256sum *.tar.gz *.zip *.deb *.rpm *.apk 2>/dev/null || shasum -a 256 *.tar.gz *.zip *.deb *.rpm *.apk) > checksums.txt
 	@ls -1 $(DIST)/*.tar.gz $(DIST)/*.zip $(DIST)/*.deb $(DIST)/*.rpm $(DIST)/*.apk $(DIST)/checksums.txt
+
+screenshots: build ## Record the README's screenshots with vhs (made-up demo data, no daemon needed)
+	env -u NO_COLOR -u CI vhs docs/demo/screenshots.tape
+	@rm -f docs/demo/.screenshots.gif
+
+demo: build ## Record the README's GIF with vhs (docs/demo.gif)
+	env -u NO_COLOR -u CI vhs docs/demo/demo.tape
 
 clean: ## Remove build output
 	go clean

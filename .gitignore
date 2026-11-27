@@ -5,6 +5,7 @@
 *.test
 *.out
 coverage.*
+/docs/demo/.screenshots.gif
 
 # ── Generated bridge (built by `make bridge`, embedded at compile time) ──
 /bridge/dist/
